@@ -1,0 +1,7 @@
+# your real log and journal: never in the repo (a GitHub Pages repo is public)
+private/
+*_TRAINING LOG DATA.json
+*_TRAINING LOG BACKUP.json
+*_TRAINING REPORT*.pdf
+node_modules/
+.DS_Store
