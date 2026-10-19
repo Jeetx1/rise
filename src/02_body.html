@@ -1,0 +1,63 @@
+</head>
+<body>
+<canvas id="fx-a" class="fx" aria-hidden="true"></canvas>
+<canvas id="fx-b" class="fx" aria-hidden="true"></canvas>
+<div class="licht" id="licht" aria-hidden="true"></div>
+<div class="vignette" aria-hidden="true"></div>
+<div class="tip" id="tip" role="tooltip"></div>
+
+<!-- start -->
+<section class="start on" id="start">
+  <div class="startkarte">
+    <div class="marke">
+      <svg class="logo" width="58" height="58" viewBox="0 0 100 100" aria-hidden="true"></svg>
+      <div>
+        <h1>Training log</h1>
+        <p class="lead">Gym days, body weight and your journal. This window is the program; your log lives in its own file, which you open here.</p>
+      </div>
+    </div>
+    <div class="wahl" id="wahl"></div>
+    <p class="startfuss" id="startfuss"></p>
+  </div>
+</section>
+
+<!-- app -->
+<div class="shell" id="shell">
+  <aside class="nav" id="nav">
+    <div class="kopfmarke">
+      <svg class="logo" width="34" height="34" viewBox="0 0 100 100" aria-hidden="true"></svg>
+      <div><b>Training log</b><small id="dateiname"></small></div>
+    </div>
+    <nav id="navliste" aria-label="Pages"></nav>
+    <div class="woche" id="woche" aria-live="polite"></div>
+    <div class="knoepfe">
+      <button type="button" class="sk" id="speichern">Saved</button>
+      <div class="menu" id="menu">
+        <button type="button" class="sk icon" id="menuknopf" aria-label="File and export" aria-haspopup="true" aria-expanded="false">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="arbeit">
+    <header class="kopf">
+      <h1 id="titel">Overview</h1>
+      <div class="ctl" id="ctl"></div>
+    </header>
+    <section class="page" id="p-overview"></section>
+    <section class="page" id="p-journal"></section>
+    <section class="page" id="p-mapping"></section>
+    <section class="page" id="p-entry"></section>
+  </main>
+
+  <nav class="tabbar" id="tabbar" aria-label="Pages"></nav>
+</div>
+
+<svg class="siegel" id="siegel" viewBox="0 0 200 200" aria-hidden="true"></svg>
+<div class="spruch" id="spruch" aria-live="polite"></div>
+<div id="dlgroot"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="dateiwahl" hidden>
+
+<noscript><div style="max-width:560px;margin:80px auto;color:#E6EDF3;font-family:sans-serif">This tool needs JavaScript.</div></noscript>

@@ -1,0 +1,9 @@
+@echo off
+rem Builds the single-file app from src\ into docs\index.html (plain byte concatenation, same as build.sh).
+rem Double-click it on any Windows PC: no Git, no Node, nothing to install.
+cd /d "%~dp0"
+if not exist docs mkdir docs
+copy /b /y src\01_head.html+src\02_body.html+src\10_helpers.js+src\20_data.js+src\30_state.js+src\40_files.js+src\50_frame.js+src\60_overview.js+src\70_journal.js+src\72_mapping.js+src\80_entry.js+src\82_booking.js+src\84_pr.js+src\90_pdf.js+src\99_boot.js docs\index.html >nul
+if errorlevel 1 (echo Build failed. & pause & exit /b 1)
+echo Built docs\index.html from src\. Open it in Chrome or Edge to check.
+if "%~1"=="" pause
