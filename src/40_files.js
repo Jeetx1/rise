@@ -9,7 +9,10 @@ function draftSchreiben(){
 function draftWeg(){ clearTimeout(draftTimer); try { localStorage.removeItem(DRAFT_KEY); } catch (e){} }
 
 function stamp(){ return TODAY; }
-function dataName(){ return stamp() + '_TRAINING LOG DATA.json'; }
+function dataName(){ return stamp() + '_RISE.json'; }
+function copyName(){ return stamp() + '_RISE COPY.json'; }
+/* a file opened under the old name (…_TRAINING LOG DATA.json) is not written back into: the picker offers the new name once */
+function neuerName(n){ return /_RISE\.json$/i.test(n || ''); }
 
 /* Reads a picked file: the .json data file, or the old Trainingslog HTML with the data inside it. */
 function lesen(text, name){
@@ -41,7 +44,7 @@ async function oeffnen(){
   if (window.showOpenFilePicker && !TOUCH){
     try {
       const [hd] = await window.showOpenFilePicker({ multiple: false, id: 'trainingslog',
-        types: [{ description: 'Training log', accept: { 'application/json': ['.json'], 'text/html': ['.html', '.htm'] } }] });
+        types: [{ description: 'RISE data', accept: { 'application/json': ['.json'], 'text/html': ['.html', '.htm'] } }] });
       const f = await hd.getFile(); got = { text: await f.text(), name: f.name, handle: hd };
     } catch (e){ if (e && e.name === 'AbortError') return; got = await oeffnenUeberEingabe(); }
   } else got = await oeffnenUeberEingabe();
@@ -54,6 +57,7 @@ function laden(got){
   FILE = { name: r.from === 'json' ? got.name : '', handle: r.from === 'json' ? got.handle : null, folder: got.handle || null };
   if (FILE.handle) idbSchreiben('letzteDatei', FILE.handle);
   starteApp();
+  if (DATA.settings && DATA.settings.theme) Kit.set(DATA.settings.theme, 'file');
   if (r.from === 'html'){
     S.dirty = true; malSpeichern();
     setTimeout(() => toast('Log taken over from ' + got.name + '. Save once to get your data file.'), 500);
@@ -125,7 +129,7 @@ async function sicherung(inhalt){
   if (!backupOrdner) return { keinOrdner: true };
   try {
     if (!(await schreibrecht(backupOrdner))) return { fehler: 'Backup skipped: no access to the backup folder.' };
-    const name = TODAY + '_TRAINING LOG BACKUP.json';
+    const name = TODAY + '_RISE BACKUP.json';
     try { await backupOrdner.getFileHandle(name); return { schon: true, name }; }
     catch (e){ if (e && e.name !== 'NotFoundError') throw e; }
     const fh = await backupOrdner.getFileHandle(name, { create: true });
@@ -138,10 +142,10 @@ function backupFrage(inhalt, gespeichertIn){
   backupGefragt = true;
   const body = h('div', {}, [
     h('p', { class: 'lead' }, ['Saved to ' + gespeichertIn + '. Want a daily backup on top?']),
-    h('p', { class: 'hinweis', style: { margin: 0 } }, ['Pick a folder once (OneDrive works well). The first save of each day then leaves a copy there, named like ' + TODAY + '_TRAINING LOG BACKUP.json. Later saves that day only update your data file.']),
+    h('p', { class: 'hinweis', style: { margin: 0 } }, ['Pick a folder once (OneDrive works well). The first save of each day then leaves a copy there, named like ' + TODAY + '_RISE BACKUP.json. Later saves that day only update your data file.']),
     h('div', { class: 'aktion' }, [
-      h('button', { class: 'btn leicht', type: 'button', onclick: () => d.zu() }, ['Not now']),
-      h('button', { class: 'btn', type: 'button', onclick: async () => {
+      h('button', { class: 'btn btn--secondary', type: 'button', onclick: () => d.zu() }, ['Not now']),
+      h('button', { class: 'btn btn--primary', type: 'button', onclick: async () => {
         d.zu();
         if (!(await backupWaehlen())) return;
         const bk = await sicherung(inhalt);
@@ -161,6 +165,7 @@ async function backupMenue(){
 
 function dateiText(){
   const before = DATA.saved;
+  try { DATA.settings = Object.assign({}, DATA.settings || {}, { theme: Kit.theme() }); } catch (e){}
   DATA.saved = new Date().toISOString();
   const text = JSON.stringify(DATA);
   try { const back = normalize(JSON.parse(text)); if (Object.keys(back.days).length !== Object.keys(DATA.days).length) throw new Error('check failed'); }
@@ -169,7 +174,7 @@ function dateiText(){
 }
 function gespeichert(){
   S.dirty = false; draftWeg(); malSpeichern(); malDateiname();
-  const sk = $('#speichern'); sk.classList.remove('blitz'); void sk.offsetWidth; sk.classList.add('blitz');
+  document.dispatchEvent(new CustomEvent('dl:saved'));
   if (S.tab === 'entry') malStand();
 }
 /* Save: straight back into the file you opened. Only a file that has never been saved asks where to go. */
@@ -179,9 +184,9 @@ async function speichern(){
   const t = dateiText(); if (!t) return;
   if (FSA){
     try {
-      let hd = FILE.handle;
+      let hd = FILE.handle && neuerName(FILE.name) ? FILE.handle : null;
       if (!hd){
-        const opts = { suggestedName: dataName(), types: [{ description: 'Training log data', accept: { 'application/json': ['.json'] } }], id: 'trainingslog' };
+        const opts = { suggestedName: dataName(), types: [{ description: 'RISE data', accept: { 'application/json': ['.json'] } }], id: 'trainingslog' };
         if (FILE.folder) opts.startIn = FILE.folder;
         hd = await window.showSaveFilePicker(opts);
       }
@@ -201,7 +206,7 @@ async function speichern(){
     return;
   }
   /* phone: no file access, so the share sheet (Save to Files) or a download */
-  const r = await ablegen(new Blob([t.text], { type: 'application/json' }), dataName(), { desc: 'Training log data', mime: 'application/json', ext: '.json' });
+  const r = await ablegen(new Blob([t.text], { type: 'application/json' }), dataName(), { desc: 'RISE data', mime: 'application/json', ext: '.json' });
   if (!r.ok){ DATA.saved = t.before; if (!r.abort) toast('Could not save: ' + (r.err && r.err.message || 'unknown error'), true); return; }
   FILE.name = r.name;
   gespeichert();
@@ -213,17 +218,16 @@ async function kopieSpeichern(){
   if (F && F.changed){ formSchreiben(); if (S.tab === 'entry') render(); }
   const t = dateiText(); if (!t) return;
   DATA.saved = t.before;
-  const r = await ablegen(new Blob([t.text], { type: 'application/json' }), dataName(), { desc: 'Training log data', mime: 'application/json', ext: '.json' });
+  const r = await ablegen(new Blob([t.text], { type: 'application/json' }), copyName(), { desc: 'RISE data', mime: 'application/json', ext: '.json' });
   if (r.ok) toast('Copy saved as ' + r.name);
   else if (!r.abort) toast('Could not save the copy: ' + (r.err && r.err.message || 'unknown error'), true);
 }
 function touch(){ S.dirty = true; malSpeichern(); draftSchreiben(); malWoche(); if (S.tab === 'entry') malStand(); }
 function malSpeichern(){
-  const b = $('#speichern'), m = $('#saveMobile');
-  b.textContent = S.dirty ? 'Save' : 'Saved';
-  b.classList.toggle('dirty', S.dirty);
+  const b = $('#speichern'); if (!b) return;
+  b.classList.toggle('is-dirty', S.dirty);
+  $('.btn__label', b).textContent = S.dirty ? 'Save' : 'Saved';
   b.title = S.dirty ? (FILE.handle ? 'Unsaved changes. Writes straight back to ' + FILE.name + '.' : 'Unsaved changes.') : (DATA && DATA.saved ? 'Last saved ' + DATA.saved.slice(0, 16).replace('T', ' ') : 'Nothing changed yet');
-  if (m){ m.classList.toggle('dirty', S.dirty); m.lastChild.textContent = S.dirty ? 'Save' : 'Saved'; }
 }
 function malDateiname(){ $('#dateiname').textContent = FILE.name || 'not saved yet'; }
 

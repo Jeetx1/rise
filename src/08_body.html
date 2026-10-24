@@ -1,0 +1,57 @@
+</head>
+<body>
+<div class="backdrop" aria-hidden="true"></div>
+<div class="ambient" id="ambient" aria-hidden="true"></div>
+<div class="tip" id="tip" role="tooltip"></div>
+
+<!-- start -->
+<section class="start on" id="start">
+  <div class="startkarte">
+    <div class="marke">
+      <div class="app-icon" data-icon></div>
+      <div>
+        <h1>RISE</h1>
+        <p class="lead">Gym days, body weight and your journal. This window is the program; your log lives in its own file, which you open here.</p>
+      </div>
+    </div>
+    <div class="wahl" id="wahl"></div>
+    <p class="startfuss" id="startfuss"></p>
+    <div class="startlook" id="startLook"><span class="row-label">Look</span></div>
+  </div>
+</section>
+
+<!-- app -->
+<div class="app shell" id="shell">
+  <header class="app-header">
+    <div class="wrap">
+      <div class="app-id">
+        <div class="app-icon" data-icon></div>
+        <div class="app-title"><b>RISE</b><small id="dateiname"></small></div>
+      </div>
+      <nav class="tabs" id="tabs" aria-label="Pages" style="--n:4"><span class="tabs__indicator"><i></i></span></nav>
+      <div class="header-actions">
+        <button type="button" class="btn btn--secondary btn--sm save" id="speichern"><span class="ring"></span><span class="dot"></span><span class="btn__label">Saved</span></button>
+        <button type="button" class="btn btn--ghost btn--sm btn--icon" id="menuknopf" aria-label="File and export" title="File and export" aria-haspopup="true" aria-expanded="false">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+  <main class="wrap" id="main">
+    <div class="kopf">
+      <div class="kopf__l"><h1 id="titel">Overview</h1><div class="woche" id="woche" aria-live="polite"></div></div>
+      <div class="kopf__r"><div class="ctl" id="ctl"></div><div class="kopf__look" id="lookSlot"></div></div>
+    </div>
+    <section class="page" id="p-overview"></section>
+    <section class="page" id="p-journal"></section>
+    <section class="page" id="p-mapping"></section>
+    <section class="page" id="p-entry"></section>
+  </main>
+</div>
+
+<svg class="siegel" id="siegel" viewBox="0 0 200 200" aria-hidden="true"></svg>
+<div class="spruch" id="spruch" aria-live="polite"></div>
+<div id="dlgroot"></div>
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+<input type="file" id="dateiwahl" hidden>
+<noscript><div style="max-width:560px;margin:80px auto;font-family:sans-serif">RISE needs JavaScript.</div></noscript>

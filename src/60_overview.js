@@ -1,3 +1,83 @@
+/* ================================================================ KPI cards (Design Lab KPI card)
+   The line is drawn in real pixels so the travelling light stays round: a point of light runs along it and draws the
+   line behind it with a short tail (length, colour, speed: the look's --spark-* tokens). Effects listen to 'dl:spark'. */
+function vorperiode(){
+  const y = parseInt(S.year, 10), ytd = S.mode === 'ytd';
+  if (ytd) return { a: agg(scopeOf(y - 1, 0, S.month)), label: String(y - 1) };
+  const m = S.month === 0 ? 11 : S.month - 1, yy = S.month === 0 ? y - 1 : y;
+  return { a: agg(scopeOf(yy, m, m)), label: MSHORT[m] };
+}
+function kpiKarten(a, anim){
+  const w = a.weights, wl = w.length ? w[w.length - 1] : null, dw = w.length > 1 ? wl.kg - w[0].kg : null;
+  const vp = vorperiode(), av = vp.a, vs = 'vs ' + vp.label, wv = av.weights;
+  /* the lines: sessions per week; the gym rate as it built up (daily for a month, weekly for YTD); every weigh-in;
+     the change as weekly averages against the first weigh-in */
+  const proWoche = a.weeks.map(c => c.v);
+  const quote = []; { const g = {}; a.days.forEach(([k, v]) => { if (v.gym) g[k] = 1; }); let n = 0;
+    for (let i = 0; i < a.spanDays; i++){ if (g[ISO(add(a.sc.from, i))]) n++; if (S.mode !== 'ytd' || (i + 1) % 7 === 0 || i === a.spanDays - 1) quote.push(n / (i + 1) * 100); } }
+  const wo = []; w.forEach(p => { const k = ISO(monday(P(p.iso))); let x = wo[wo.length - 1]; if (!x || x.k !== k){ x = { k, s: 0, n: 0 }; wo.push(x); } x.s += p.kg; x.n++; });
+  const trend = w.length ? wo.map(x => x.s / x.n - w[0].kg) : [];
+  const delta = (d, dez, einheit, besser, titel) => (d === null || !isFinite(d) || Math.abs(d) < Math.pow(10, -dez) / 2) ? null :
+    { txt: sgn(d) + Math.abs(d).toFixed(dez) + (einheit ? ' ' + einheit : '') + ' ' + vs, gut: besser !== 0 && (d > 0) === (besser > 0), titel: titel + ' ' + vs };
+  const grid = h('div', { class: 'kpis' }), zaehlen = [], linien = [];
+  const karte = (label, wert, dez, fmt, einheit, fuss, linie, dl) => {
+    const b = h('b', {}), sv = svg('svg', { class: 'spark', 'aria-hidden': 'true' });
+    grid.appendChild(h('div', { class: 'card kpi' }, [
+      h('div', {}, [h('div', { class: 'kpi__label' }, [h('span', {}, [label])]), h('div', { class: 'kpi__value' }, [b, einheit ? h('small', {}, [einheit]) : null])]),
+      h('div', {}, [sv, h('div', { class: 'kpi__foot' }, [dl ? h('span', { class: 'delta ' + (dl.gut ? 'delta--up' : 'delta--flat'), title: dl.titel }, [dl.txt]) : null, h('span', {}, [fuss])])])]));
+    if (wert === null) b.textContent = '—'; else if (anim) zaehlen.push([b, wert, dez, fmt]); else b.textContent = fmt(wert);
+    linien.push([sv, linie]);
+  };
+  karte('Per week', a.perWeek, 1, n1, '', 'target ' + C.weeklyTarget, proWoche,
+    av.logged ? delta(a.perWeek - av.perWeek, 1, '', 1, 'Sessions per week') : null);
+  karte('Gym rate', a.gym / a.spanDays * 100, 1, n1, '%', 'of ' + a.spanDays + ' days logged', quote,
+    av.logged ? delta((a.gym / a.spanDays - av.gym / av.spanDays) * 100, 1, 'pts', 1, 'Gym rate, in percentage points,') : null);
+  karte('Weight', wl ? wl.kg : null, 2, n2, wl ? 'kg' : '', wl ? deDate(P(wl.iso)) : 'no weigh-in yet', w.map(p => p.kg),
+    wl && wv.length ? delta(wl.kg - wv[wv.length - 1].kg, 1, 'kg', 0, 'Last weigh-in against the last one') : null);
+  karte('Change', dw, 2, v => sgn(v) + n2(Math.abs(v)), dw === null ? '' : 'kg', dw === null ? 'needs two weigh-ins' : sgn(dw) + n1(Math.abs(dw / w[0].kg * 100)) + '% since ' + deShort(P(w[0].iso)), trend, null);
+  /* figures and lines start once the cards are on the page (the lines need their width) */
+  requestAnimationFrame(() => {
+    zaehlen.forEach(([b, v, dez, fmt]) => { if (b.isConnected) hochzaehlen(b, v, dez, fmt); });
+    linien.forEach(([sv, d], i) => { if (sv.isConnected) kpiSpark(sv, d, anim && BEWEGUNG, 220 + i * 140); });
+  });
+  return grid;
+}
+function kpiGlatt(pts){
+  let d = 'M' + pts[0][0].toFixed(1) + ',' + pts[0][1].toFixed(1);
+  for (let i = 1; i < pts.length; i++){ const p = pts[i - 1], q = pts[i], mx = (p[0] + q[0]) / 2; d += 'C' + mx.toFixed(1) + ',' + p[1].toFixed(1) + ' ' + mx.toFixed(1) + ',' + q[1].toFixed(1) + ' ' + q[0].toFixed(1) + ',' + q[1].toFixed(1); }
+  return d;
+}
+function kpiSignal(el, phase){ try { el.dispatchEvent(new CustomEvent('dl:spark', { bubbles: true, detail: { phase } })); } catch (e){} }
+function kpiSpark(sv, data, lauf, delay){
+  const W = Math.max(40, Math.round(sv.getBoundingClientRect().width || 160)), H = 34, px = 4, py = 5;
+  sv.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  sv.innerHTML = '<path class="spark__glow"/><path class="spark__line"/><path class="spark__trail t1"/><path class="spark__trail t2"/><path class="spark__trail t3"/><circle class="spark__head" r="2.6"/>';
+  let d = '';
+  if (data.length > 1){
+    const lo = Math.min.apply(null, data), hi = Math.max.apply(null, data), r = hi - lo || 1;
+    d = kpiGlatt(data.map((v, i) => [px + i / (data.length - 1) * (W - 2 * px), H - py - (v - lo) / r * (H - 2 * py)]));
+  }
+  sv.querySelectorAll('.spark__glow, .spark__line, .spark__trail').forEach(p => p.setAttribute('d', d));
+  const line = sv.querySelector('.spark__line'), total = d && line.getTotalLength ? line.getTotalLength() : 0;
+  if (!lauf || !total){ sv.classList.add('is-done'); kpiSignal(sv, 'rest'); return; }
+  const dur = Number(Kit.tok('--spark-dur')) || 1100, tl = Number(Kit.tok('--spark-trail-len')) || .25, glow = sv.querySelector('.spark__glow'), head = sv.querySelector('.spark__head');
+  const trails = [['.t1', 1], ['.t2', .5], ['.t3', .2]].map(([c, f]) => [sv.querySelector(c), Math.max(4, tl * f * total)]);
+  [line, glow].forEach(p => { p.style.strokeDasharray = total + ' ' + total; p.style.strokeDashoffset = total; });
+  trails.forEach(([p]) => { p.style.strokeDasharray = '0 ' + total * 2; });
+  head.setAttribute('transform', 'translate(-20 -20)');
+  sv.classList.add('is-running'); kpiSignal(sv, 'start');
+  const t0 = performance.now() + delay, ease = x => x < .5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
+  (function schritt(now){
+    if (!sv.isConnected) return;
+    const x = Math.max(0, Math.min(1, (now - t0) / dur)), dd = ease(x) * total;
+    line.style.strokeDashoffset = total - dd; glow.style.strokeDashoffset = total - dd;
+    trails.forEach(([p, L]) => { const l = Math.min(L, dd); p.style.strokeDasharray = l + ' ' + total * 2; p.style.strokeDashoffset = -(dd - l); });
+    if (x > 0){ const pt = line.getPointAtLength(dd); head.setAttribute('transform', 'translate(' + pt.x.toFixed(2) + ' ' + pt.y.toFixed(2) + ')'); }
+    if (x < 1) requestAnimationFrame(schritt);
+    else { line.style.strokeDasharray = ''; line.style.strokeDashoffset = ''; sv.classList.remove('is-running'); sv.classList.add('is-done'); kpiSignal(sv, 'end'); }
+  })(performance.now());
+}
+
 /* ================================================================ overview */
 function seiteOverview(el, anim){
   const a = agg(scope());
@@ -5,38 +85,29 @@ function seiteOverview(el, anim){
   let best = 0, lauf = 0; a.weeks.forEach(c => { lauf = c.v >= C.weeklyTarget ? lauf + 1 : 0; best = Math.max(best, lauf); });
 
   const gross = h('span', {}, [String(a.gym)]);
-  const held = h('div', { class: 'blatt' }, [
+  const held = h('div', { class: 'card blatt' }, [
     h('div', { class: 'held' }, [
       h('div', {}, [h('div', { class: 'periode' }, [scopeLabel(true)]),
         h('div', { class: 'gross' }, [gross, h('small', {}, [a.gym === 1 ? 'gym day' : 'gym days'])]), h('div', { class: 'streifen' })]),
       ringBox(a, anim)
     ])
   ]);
-  const zahlen = h('div', { class: 'zahlen' });
-  const zahl = (l, v, f) => zahlen.appendChild(h('div', {}, [h('div', { class: 'l' }, [l]), h('div', { class: 'v', html: v }), h('div', { class: 'f' }, [f])]));
-  zahl('Per week', n1(a.perWeek), 'target ' + C.weeklyTarget);
-  zahl('Gym rate', n1(a.gym / a.spanDays * 100) + '<small>%</small>', 'of ' + a.spanDays + ' days logged');
-  zahl('Best run', best + '<small>' + (best === 1 ? 'week' : 'weeks') + '</small>', 'on target, now ' + lauf);
-  zahl('Weight', wl ? n2(wl.kg) + '<small>kg</small>' : '\u2014', wl ? deDate(P(wl.iso)) : 'no weigh-in yet');
-  zahl('Change', dw === null ? '\u2014' : sgn(dw) + n2(Math.abs(dw)) + '<small>kg</small>', dw === null ? 'needs two weigh-ins' : sgn(dw) + n1(Math.abs(dw / w[0].kg * 100)) + '% since ' + deShort(P(w[0].iso)));
-  held.appendChild(zahlen);
   el.appendChild(held);
   if (anim) hochzaehlen(gross, a.gym, 0);
+  el.appendChild(kpiKarten(a, anim));
 
-  el.appendChild(h('div', { class: 'blatt' }, [rasterBox(a, anim)]));
+  el.appendChild(h('div', { class: 'card blatt' }, [rasterBox(a, anim)]));
   el.appendChild(monatsKalender(anim));
 
-  el.appendChild(h('div', { class: 'blatt' }, [h('div', { class: 'bk' }, [h('h2', {}, ['Body weight']), h('small', {}, [w.length ? plural(w.length, 'weigh-in') : scopeLabel()])]), gewichtChart(a, anim)]));
+  el.appendChild(h('div', { class: 'card blatt' }, [h('div', { class: 'bk' }, [h('h2', {}, ['Body weight']), h('small', {}, [w.length ? plural(w.length, 'weigh-in') : scopeLabel()])]), gewichtChart(a, anim)]));
 
-  const fk = h('div', { class: 'blatt' });
-  fk.appendChild(h('div', { class: 'bk' }, [h('h2', {}, [S.focus === 'part' ? 'Body parts' : 'Workouts']), h('div', { class: 'mini-seg' }, [
-    h('button', { type: 'button', class: S.focus === 'part' ? 'on' : '', onclick: () => { S.focus = 'part'; S.firstPaint.overview = false; render(); } }, ['Body parts']),
-    h('button', { type: 'button', class: S.focus === 'split' ? 'on' : '', onclick: () => { S.focus = 'split'; S.firstPaint.overview = false; render(); } }, ['Workouts'])])]));
+  const fk = h('div', { class: 'card blatt' });
+  fk.appendChild(h('div', { class: 'bk' }, [h('h2', {}, [S.focus === 'part' ? 'Body parts' : 'Workouts']), segment([['part', 'Body parts'], ['split', 'Workouts']], S.focus, v => { S.focus = v; S.firstPaint.overview = false; nachSchieber(render); }, 'Count by')]));
   fk.appendChild(balkenListe(ranked(S.focus === 'part' ? a.part : a.split), S.focus === 'part', anim));
   const un = Object.keys(a.unmapped);
   if (S.focus === 'part' && un.length) fk.appendChild(h('div', { class: 'warn' }, [h('span', {}, ['No body parts yet: ' + un.join(', ')]),
-    h('button', { class: 'btn mini leicht', type: 'button', onclick: () => zeigeTab('mapping') }, ['Map them'])]));
-  const wk = h('div', { class: 'blatt' }, [h('div', { class: 'bk' }, [h('h2', {}, ['Sessions per week']), h('small', {}, ['line = target of ' + C.weeklyTarget])]), wochenChart(a, anim)]);
+    h('button', { class: 'btn btn--secondary btn--sm', type: 'button', onclick: () => zeigeTab('mapping') }, ['Map them'])]));
+  const wk = h('div', { class: 'card blatt' }, [h('div', { class: 'bk' }, [h('h2', {}, ['Sessions per week']), h('small', {}, ['line = target of ' + C.weeklyTarget])]), wochenChart(a, anim)]);
   el.appendChild(h('div', { class: 'zwei' }, [wk, fk]));
   el.appendChild(prKachel(a));
 }
@@ -49,7 +120,7 @@ function prKachel(a){
     if (k >= ISO(a.sc.from) && k <= ISO(a.sc.to)) imZeitraum.push({ iso: k, z, r });
     if (r.art === 'pr') best[r.lift.toLowerCase()] = { iso: k, z, r };
   }));
-  const karte = h('div', { class: 'blatt' }, [h('div', { class: 'bk' }, [h('h2', {}, ['PRs']), h('small', {}, [imZeitraum.length ? plural(imZeitraum.length, 'PR') + ' in ' + scopeLabel() : 'none in ' + scopeLabel()])])]);
+  const karte = h('div', { class: 'card blatt' }, [h('div', { class: 'bk' }, [h('h2', {}, ['PRs']), h('small', {}, [imZeitraum.length ? plural(imZeitraum.length, 'PR') + ' in ' + scopeLabel() : 'none in ' + scopeLabel()])])]);
   const zeile = e => {
     const b = kgBei(e.iso);
     return h('button', { type: 'button', class: 'przeile', onclick: () => goTo('entry', e.iso) }, [
@@ -70,16 +141,16 @@ function prKachel(a){
 function ringBox(a, anim){
   const n = a.weeks.length, R = 26, U = 2 * Math.PI * R, gap = n > 1 ? Math.min(3, U / n * .18) : 0;
   const s = svg('svg', { width: 72, height: 72, viewBox: '0 0 68 68', class: 'ring' + (anim ? ' ein' : ''), 'aria-hidden': 'true' });
-  s.appendChild(svg('circle', { cx: 34, cy: 34, r: 32, fill: '#1A2129' }));
-  if (!n) s.appendChild(svg('circle', { cx: 34, cy: 34, r: R, fill: 'none', stroke: '#2A3540', 'stroke-width': 9 }));
+  s.appendChild(svg('circle', { cx: 34, cy: 34, r: 32, class: 'rbg' }));
+  if (!n) s.appendChild(svg('circle', { cx: 34, cy: 34, r: R, fill: 'none', class: 'seg none', 'stroke-width': 9 }));
   a.weeks.forEach((c, i) => {
-    const len = U / n - gap, col = c.v >= C.weeklyTarget ? '#9CC4F0' : (c.v ? '#3E6B9E' : '#2A3540');
-    const seg = svg('circle', { class: 'seg', cx: 34, cy: 34, r: R, fill: 'none', stroke: col, 'stroke-width': 9, 'stroke-dasharray': len + ' ' + (U - len), 'stroke-dashoffset': -(i * U / n) + U / 4 });
+    const len = U / n - gap, col = c.v >= C.weeklyTarget ? 'hit' : (c.v ? 'some' : 'none');
+    const seg = svg('circle', { class: 'seg ' + col, cx: 34, cy: 34, r: R, fill: 'none', 'stroke-width': 9, 'stroke-dasharray': len + ' ' + (U - len), 'stroke-dashoffset': -(i * U / n) + U / 4 });
     if (anim) seg.style.animationDelay = (i * 22) + 'ms';
     s.appendChild(seg);
   });
-  s.appendChild(svg('circle', { cx: 34, cy: 34, r: 15, fill: '#11161B' }));
-  s.appendChild(svg('circle', { cx: 34, cy: 34, r: 6, fill: 'none', stroke: '#C9D6E2', 'stroke-width': 2.4 }));
+  s.appendChild(svg('circle', { cx: 34, cy: 34, r: 15, class: 'rcore' }));
+  s.appendChild(svg('circle', { cx: 34, cy: 34, r: 6, class: 'raxle', 'stroke-width': 2.4 }));
   return h('div', { class: 'ringbox', title: 'Each segment is a week. Light blue: ' + C.weeklyTarget + ' or more sessions.' }, [
     h('div', { class: 'rt' }, [h('b', {}, [a.hit + ' / ' + a.weeks.length]), 'weeks on target']), s]);
 }
@@ -159,10 +230,10 @@ function gewichtChart(a, anim){
   const X = t => L + (t - x0) / Math.max(1, x1 - x0) * (W - L - R), Y = v => T + (hi - v) / Math.max(.001, hi - lo) * (H - T - B);
   const g = svg('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': 'Body weight over time' });
   g.appendChild(svg('defs', {}, [svg('linearGradient', { id: 'gewVerlauf', x1: 0, x2: 0, y1: 0, y2: 1 }, [
-    svg('stop', { offset: '0%', 'stop-color': '#2B62C4', 'stop-opacity': '.16' }), svg('stop', { offset: '100%', 'stop-color': '#2B62C4', 'stop-opacity': '0' })])]));
+    svg('stop', { offset: '0%', style: 'stop-color:var(--weight);stop-opacity:var(--weight-area)' }), svg('stop', { offset: '100%', style: 'stop-color:var(--weight);stop-opacity:0' })])]));
   for (let i = 0; i <= 3; i++){
     const v = lo + (hi - lo) * i / 3, yy = Y(v);
-    g.appendChild(svg('line', { x1: L, x2: W - R, y1: yy, y2: yy, stroke: '#E6EAE7', 'stroke-width': 1 }));
+    g.appendChild(svg('line', { x1: L, x2: W - R, y1: yy, y2: yy, class: 'gitter', 'stroke-width': 1 }));
     const t = svg('text', { x: L - 8, y: yy + 4, 'text-anchor': 'end', class: 'ax' }); t.textContent = n1(v); g.appendChild(t);
   }
   const d0 = new Date(x0);
@@ -183,11 +254,11 @@ function gewichtChart(a, anim){
     g.appendChild(svg('path', { class: 'flaeche', d: dPath + ' L' + xy[xy.length - 1][0] + ',' + (H - B) + ' L' + xy[0][0] + ',' + (H - B) + ' Z' }));
     g.appendChild(svg('path', { class: 'linie', d: dPath, pathLength: 1, 'stroke-dasharray': 1, 'stroke-dashoffset': 0 }));
   }
-  xy.forEach(([x, y], i) => { const c = svg('circle', { cx: x, cy: y, r: 3.5, fill: '#F7F8F7', stroke: '#2B62C4', 'stroke-width': 2 });
+  xy.forEach(([x, y], i) => { if (xy.length > 40 && i < xy.length - 1) return; const c = svg('circle', { cx: x, cy: y, r: 3.5, class: 'wpunkt' });
     if (anim){ c.style.opacity = 0; c.style.transition = 'opacity .3s'; setTimeout(() => { c.style.opacity = 1; }, 250 + i / Math.max(1, xy.length) * 800); }
     g.appendChild(c); });
-  const cross = svg('line', { x1: 0, x2: 0, y1: T, y2: H - B, stroke: '#14191E', 'stroke-width': 1, 'stroke-dasharray': '3 3', opacity: 0 });
-  const dot = svg('circle', { r: 6, fill: '#2B62C4', stroke: '#F7F8F7', 'stroke-width': 2.4, opacity: 0 });
+  const cross = svg('line', { x1: 0, x2: 0, y1: T, y2: H - B, class: 'kreuz', 'stroke-width': 1, 'stroke-dasharray': '3 3', opacity: 0 });
+  const dot = svg('circle', { r: 6, class: 'wdot', opacity: 0 });
   g.appendChild(cross); g.appendChild(dot);
   g.appendChild(svg('rect', { x: L, y: 0, width: W - L - R, height: H, fill: 'transparent' }));
   wrap.appendChild(g);
@@ -195,7 +266,7 @@ function gewichtChart(a, anim){
     const r = g.getBoundingClientRect(), cx = (e.clientX - r.left) / r.width * W;
     let best = 0, bd = 1e9; xy.forEach((p, i) => { const d = Math.abs(p[0] - cx); if (d < bd){ bd = d; best = i; } });
     const p = pts[best], [px, py] = xy[best], delta = best > 0 ? p.kg - pts[best - 1].kg : null;
-    cross.setAttribute('x1', px); cross.setAttribute('x2', px); cross.setAttribute('opacity', '.25');
+    cross.setAttribute('x1', px); cross.setAttribute('x2', px); cross.setAttribute('opacity', '.6');
     dot.setAttribute('cx', px); dot.setAttribute('cy', py); dot.setAttribute('opacity', '1');
     tipZeigen('<b>' + n2(p.kg) + ' kg</b><br><span class="t2">' + DAYNAMES[dow(P(p.iso))] + ' ' + deDate(P(p.iso)) + (delta !== null ? ', ' + sgn(delta) + n2(Math.abs(delta)) : '') + '</span>',
       r.left + px / W * r.width, r.top + py / H * r.height);
@@ -216,8 +287,7 @@ function wochenChart(a, anim){
   const g = svg('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': 'Sessions per week' });
   cols.forEach((c, i) => {
     const x = L + i * bw, hgt = Yh(c.v);
-    const bar = svg('rect', { class: 'saeule', x: x + bw * .18, y: H - B - Math.max(2, hgt), width: Math.max(2, bw * .64), height: Math.max(2, hgt), rx: Math.min(4, bw * .22),
-      fill: c.v >= C.weeklyTarget ? '#2F5E91' : (c.v ? '#9CC4F0' : '#E1E5E2') });
+    const bar = svg('rect', { class: 'saeule ' + (c.v >= C.weeklyTarget ? 'hit' : (c.v ? 'some' : 'none')), x: x + bw * .18, y: H - B - Math.max(2, hgt), width: Math.max(2, bw * .64), height: Math.max(2, hgt), rx: Math.min(5, bw * .26) });
     bar.style.setProperty('--i', i);
     bar.addEventListener('mousemove', e => tipZeigen('<b>Week ' + isoWeek(c.d) + '</b><br><span class="t2">' + deShort(c.d) + ' \u2013 ' + deShort(add(c.d, 6)) + ', ' + plural(c.v, 'session') + '</span>', e.clientX, e.clientY - 4));
     bar.addEventListener('mouseleave', tipWeg);
@@ -226,7 +296,7 @@ function wochenChart(a, anim){
       const t = svg('text', { x: x + bw / 2, y: H - B + 16, 'text-anchor': 'middle', class: 'ax' }); t.textContent = isoWeek(c.d); g.appendChild(t);
     }
   });
-  g.appendChild(svg('line', { x1: L, x2: W - L, y1: goalY, y2: goalY, stroke: '#14191E', 'stroke-opacity': '.35', 'stroke-width': 1.2, 'stroke-dasharray': '4 4' }));
+  g.appendChild(svg('line', { x1: L, x2: W - L, y1: goalY, y2: goalY, class: 'ziel', 'stroke-width': 1.2, 'stroke-dasharray': '4 4' }));
   wrap.appendChild(g);
   return wrap;
 }
@@ -244,9 +314,9 @@ function monatsKalender(anim){
   const key = S.year + '-' + String(m + 1).padStart(2, '0');
   let gym = 0, log = 0; for (let d = 1; d <= n; d++){ const r = DATA.days[key + '-' + String(d).padStart(2, '0')]; if (r){ log++; if (r.gym) gym++; } }
   const zu = kalenderZu();
-  const karte = h('div', { class: 'blatt' + (zu ? ' kalzu' : '') }, [h('div', { class: 'bk' }, [h('h2', {}, [MONTHS[m] + ' ' + S.year]),
+  const karte = h('div', { class: 'card blatt' + (zu ? ' kalzu' : '') }, [h('div', { class: 'bk' }, [h('h2', {}, [MONTHS[m] + ' ' + S.year]),
     h('div', { class: 'kalkopf' }, [h('small', {}, [log ? plural(gym, 'gym day') + ', ' + plural(log, 'day') + ' logged' : 'nothing logged yet']),
-      h('button', { type: 'button', class: 'btn mini leicht', 'aria-expanded': String(!zu), onclick: () => { kalenderZu(!zu); S.firstPaint.overview = true; render(); } }, [zu ? 'Show' : 'Hide'])])])]);
+      h('button', { type: 'button', class: 'btn btn--secondary btn--sm', 'aria-expanded': String(!zu), onclick: () => { kalenderZu(!zu); S.firstPaint.overview = true; render(); } }, [zu ? 'Show' : 'Hide'])])])]);
   if (zu) return karte;
   const kal = h('div', { class: 'kal' + (anim ? ' ein' : '') });
   const agenda = h('div', { class: 'agenda' + (anim ? ' ein' : '') });
@@ -273,7 +343,7 @@ function monatsKalender(anim){
       if (r.gym) t.appendChild(h('span', { class: 'kw' }, [r.training || 'Gym']));
       const x = [r.kg != null ? n2(r.kg) + ' kg' : ''].concat(extras).filter(Boolean);
       if (x.length) t.appendChild(h('span', { class: 'mut', style: { fontSize: '12px', fontWeight: '600' } }, [x.join(' \u00b7 ')]));
-      if (r.special) t.appendChild(h('span', { style: { color: 'var(--gym3)', fontWeight: '600' } }, [zeilenVon(r.special).join(' \u00b7 ')]));
+      if (r.special) t.appendChild(h('span', { class: 'sp' }, [zeilenVon(r.special).join(' \u00b7 ')]));
       const j = zeilenVon(r.journal); if (j.length) t.appendChild(h('span', {}, [j.join(' \u00b7 ')]));
       const ag = h('button', { type: 'button', class: 'ag' + (r.gym ? ' gym' : ''), onclick: () => goTo('entry', iso) }, [h('div', { class: 'd' }, [h('b', {}, [String(d)]), DAYNAMES[wd]]), t]);
       ag.style.setProperty('--i', ai++);

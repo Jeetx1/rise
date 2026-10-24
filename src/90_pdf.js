@@ -16,11 +16,11 @@ function pdfDialog(){
   const opt = { journal: true, notizen: true, prs: true };
   const pille = (key, txt) => { const b = h('button', { type: 'button', class: 'pille on', 'aria-pressed': 'true' }, [h('i'), txt]);
     b.onclick = () => { opt[key] = !opt[key]; b.classList.toggle('on', opt[key]); b.setAttribute('aria-pressed', String(opt[key])); }; return b; };
-  const los = h('button', { class: 'btn', type: 'button' }, ['Preview']);
+  const los = h('button', { class: 'btn btn--primary', type: 'button' }, ['Preview']);
   const body = h('div', { class: 'pdfwahl' }, [
     h('div', { class: 'zeile' }, [h('label', { class: 'feld' }, [h('span', {}, ['Year']), ySel]), h('label', { class: 'feld' }, [h('span', {}, ['Month']), mSel])]),
     h('div', { class: 'feld' }, [h('span', {}, ['Include']), h('div', { class: 'optionen' }, [pille('journal', 'Journal'), pille('notizen', 'Special notes'), pille('prs', 'PRs')])]),
-    h('div', { class: 'aktion' }, [h('button', { class: 'btn leicht', type: 'button', onclick: () => d.zu() }, ['Cancel']), los])
+    h('div', { class: 'aktion' }, [h('button', { class: 'btn btn--secondary', type: 'button', onclick: () => d.zu() }, ['Cancel']), los])
   ]);
   let url = null;
   const weg = () => { if (url){ URL.revokeObjectURL(url); url = null; } };
@@ -29,13 +29,13 @@ function pdfDialog(){
     let blob, name;
     const y = ySel.value, m = parseInt(mSel.value, 10);
     let doc;
-    try { doc = baueBericht(y, m, opt); blob = doc.output('blob'); name = stamp() + '_TRAINING REPORT ' + MONTHS[m].toUpperCase() + ' ' + y + '.pdf'; }
+    try { doc = baueBericht(y, m, opt); blob = doc.output('blob'); name = stamp() + '_RISE REPORT ' + MONTHS[m].toUpperCase() + ' ' + y + '.pdf'; }
     catch (e){ toast('PDF failed: ' + (e && e.message || e), true); return; }
     weg(); url = URL.createObjectURL(blob);
     const db = d.box.querySelector('.db'), titel = d.box.querySelector('.dk h2'), sub = d.box.querySelector('.dk p');
     titel.textContent = MONTHS[m] + ' ' + y; sub.textContent = name;
     d.box.classList.add('breit');
-    const speichernBtn = h('button', { class: 'btn', type: 'button' }, ['Save PDF']);
+    const speichernBtn = h('button', { class: 'btn btn--primary', type: 'button' }, ['Save PDF']);
     /* the click on Save is fresh, so the save dialog or share sheet may open */
     speichernBtn.onclick = () => ablegen(blob, name, { desc: 'PDF', mime: 'application/pdf', ext: '.pdf' }).then(r => {
       if (r.ok){ d.zu(); toast(r.download ? 'Downloaded as ' + r.name : (r.opened ? 'Opened in a new tab' : (r.shared ? 'Handed to the share sheet' : 'Saved as ' + r.name))); }
@@ -53,8 +53,8 @@ function pdfDialog(){
       doc.zeichne(leinwand, 1);
     });
     db.appendChild(h('div', { class: 'aktion' }, [
-      h('button', { class: 'btn leicht', type: 'button', onclick: () => { weg(); d.box.classList.remove('breit'); titel.textContent = 'Monthly report'; sub.textContent = 'One page, A4 landscape'; db.innerHTML = ''; db.appendChild(body); } }, ['Back']),
-      h('button', { class: 'btn leicht', type: 'button', onclick: () => window.open(url, '_blank') }, ['Open full size']),
+      h('button', { class: 'btn btn--secondary', type: 'button', onclick: () => { weg(); d.box.classList.remove('breit'); titel.textContent = 'Monthly report'; sub.textContent = 'One page, A4 landscape'; sub.hidden = false; db.innerHTML = ''; db.appendChild(body); } }, ['Back']),
+      h('button', { class: 'btn btn--secondary', type: 'button', onclick: () => window.open(url, '_blank') }, ['Open full size']),
       speichernBtn
     ]));
     setTimeout(() => speichernBtn.focus(), 30);
@@ -180,7 +180,7 @@ function MiniPDF(o){
       const katalog = neu(''), seitenObj = neu('');
       const f1 = neu('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
       const f2 = neu('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
-      const info = neu('<< /Title (' + esc(pdfText(props.title || '')) + ') /Creator (' + esc(pdfText(props.creator || 'Training log')) + ') /Producer (Training log) >>');
+      const info = neu('<< /Title (' + esc(pdfText(props.title || '')) + ') /Creator (' + esc(pdfText(props.creator || 'RISE')) + ') /Producer (RISE) >>');
       const kids = [];
       seiten.forEach(ops => {
         const inhalt = ops.map(op => {
@@ -317,8 +317,8 @@ function baueBericht(year, m, opt){
   font('bold', 6.5); farbe(INK2); text('Sessions per week', ML, 201); text('Body parts', ML, 205);
   font('normal', 6.5); farbe(INK3);
   text(kuerzen(wochen || '-', 150), ML + 22, 201); text(kuerzen(teile || '-', 160), ML + 22, 205);
-  text((C.name ? C.name + '  /  ' : '') + 'Training log  /  exported ' + deDate(P(TODAY)), W - MR, 205, { align: 'right' });
-  doc.setProperties({ title: 'Training report ' + monat, creator: 'Training log' });
+  text((C.name ? C.name + '  /  ' : '') + 'RISE  /  exported ' + deDate(P(TODAY)), W - MR, 205, { align: 'right' });
+  doc.setProperties({ title: 'Training report ' + monat, creator: 'RISE' });
   return doc;
 }
 

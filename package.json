@@ -1,7 +1,7 @@
 {
-  "name": "training-log",
+  "name": "rise",
   "private": true,
-  "description": "Training log and journal: a single-file HTML app with its data in a separate .json file.",
+  "description": "RISE training log and journal: a single-file HTML app with its data in a separate .json file.",
   "scripts": {
     "build": "./build.sh",
     "test": "./run_tests.sh"

@@ -1,7 +1,19 @@
 # your real log and journal: never in the repo (a GitHub Pages repo is public)
 private/
-*_TRAINING LOG DATA.json
-*_TRAINING LOG BACKUP.json
+*TRAINING LOG*.json
+*_RISE.json
+*RISE COPY*.json
+*BACKUP*
 *_TRAINING REPORT*.pdf
+*_RISE REPORT*.pdf
+# dated offline copies of the app live in the app folder, not here
+*_RISE.html
+*TRAINING LOG OFFLINE*.html
+# test output and tooling
+tests/shots/
 node_modules/
+package-lock.json
+__pycache__/
 .DS_Store
+Thumbs.db
+desktop.ini

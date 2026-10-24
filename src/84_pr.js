@@ -1,4 +1,3 @@
-
 /* ================================================================ personal records
    A lift record is a Special line like "Deadlift 210 kg" or, for a set, "Deadlift 190 kg x4".
    Only records with a body weight (that day, else the nearest within 7 days) take part.

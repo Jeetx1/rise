@@ -7,7 +7,7 @@ function seiteMapping(el){
   nameIn.addEventListener('input', () => { C.name = nameIn.value.trim(); touch(); });
   const wert = h('b', {}, [String(C.weeklyTarget)]);
   const setz = v => { C.weeklyTarget = Math.max(1, Math.min(14, v)); wert.textContent = C.weeklyTarget; touch(); };
-  el.appendChild(h('div', { class: 'blatt' }, [h('div', { class: 'einst' }, [
+  el.appendChild(h('div', { class: 'card blatt' }, [h('div', { class: 'einst' }, [
     h('label', { class: 'feld' }, [h('span', {}, ['Your name']), nameIn]),
     h('div', { class: 'feld' }, [h('span', {}, ['Sessions per week']), h('div', { class: 'stepper' }, [
       h('button', { type: 'button', 'aria-label': 'One less', onclick: () => setz(C.weeklyTarget - 1) }, ['\u2212']), wert,
@@ -30,14 +30,14 @@ function seiteMapping(el){
     C.bodyParts.push(v); touch(); render(); const n = $('#p-mapping .tag.neu input'); if (n) n.focus();
   });
   tags.appendChild(h('span', { class: 'tag neu' }, [neuTeil]));
-  el.appendChild(h('div', { class: 'blatt' }, [h('div', { class: 'bk' }, [h('h2', {}, ['Body parts']), h('small', {}, ['type and press Enter to add'])]), tags]));
+  el.appendChild(h('div', { class: 'card blatt' }, [h('div', { class: 'bk' }, [h('h2', {}, ['Body parts']), h('small', {}, ['type and press Enter to add'])]), tags]));
 
   /* workouts: one line each, click to edit */
-  const karte = h('div', { class: 'blatt' }, [h('div', { class: 'bk' }, [h('h2', {}, ['Workouts']), h('small', {}, ['these fill the dropdown under Data entry'])])]);
+  const karte = h('div', { class: 'card blatt' }, [h('div', { class: 'bk' }, [h('h2', {}, ['Workouts']), h('small', {}, ['these fill the dropdown under Data entry'])])]);
   const cands = mergeCandidates();
   cands.forEach(grp => karte.appendChild(h('div', { class: 'sugg' }, [
     h('span', {}, [grp.map(g => '\u201c' + g.name + '\u201d').join(' and ') + ' look like the same workout.']),
-    h('button', { class: 'btn mini leicht', type: 'button', onclick: () => { grp.slice(1).forEach(g => mergeSplits(g.name, grp[0].name)); touch(); render(); toast('Merged into \u201c' + grp[0].name + '\u201d'); } }, ['Merge into \u201c' + grp[0].name + '\u201d'])])));
+    h('button', { class: 'btn btn--secondary btn--sm', type: 'button', onclick: () => { grp.slice(1).forEach(g => mergeSplits(g.name, grp[0].name)); touch(); render(); toast('Merged into \u201c' + grp[0].name + '\u201d'); } }, ['Merge into \u201c' + grp[0].name + '\u201d'])])));
   const names = Object.keys(C.map);
   Object.keys(seen).forEach(k => { if (!partsOf(k) && names.indexOf(k) < 0) names.push(k); });
   names.sort((x, y) => (seen[y] || 0) - (seen[x] || 0) || (x.toLowerCase() < y.toLowerCase() ? -1 : 1));
@@ -52,7 +52,7 @@ function seiteMapping(el){
     C.map[v] = []; S.offen = v; touch(); render();
   };
   neuWo.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); addWo(); } });
-  karte.appendChild(h('div', { class: 'neuwo' }, [neuWo, h('button', { class: 'btn', type: 'button', onclick: addWo }, ['Add'])]));
+  karte.appendChild(h('div', { class: 'neuwo' }, [neuWo, h('button', { class: 'btn btn--primary', type: 'button', onclick: addWo }, ['Add'])]));
   el.appendChild(karte);
 }
 function workoutZeile(name, used){
@@ -91,7 +91,7 @@ function workoutZeile(name, used){
     ziel.value = '';
   };
   edit.appendChild(h('div', { class: 'aktionen' }, [ziel,
-    h('button', { class: 'btn mini gefahr', type: 'button', onclick: () => {
+    h('button', { class: 'btn btn--quiet-danger btn--sm', type: 'button', onclick: () => {
       if (!used){ delete C.map[name]; delete C.colors[name]; S.offen = null; touch(); render(); return; }
       bestaetigen({ titel: 'Remove \u201c' + name + '\u201d?', lead: 'It leaves the dropdown. The ' + plural(used, 'day') + ' that used it keep their label and show up as without body parts. To fold it into another workout, use Merge instead.',
         ja: 'Remove', gefahr: true, beiJa: () => { delete C.map[name]; S.offen = null; touch(); render(); } });

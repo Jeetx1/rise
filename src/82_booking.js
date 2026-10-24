@@ -30,25 +30,26 @@ function spruchWahl(art){
 function baueSiegel(art){
   const s = $('#siegel'); if (!s) return;
   let p = ''; for (let j = 0; j < 6; j++) p += '<path d="' + rosette(100, 100, 70 + j * 3.6, 3, 36, j * .5) + '"/>';
-  const mond = '<path d="M112 70a26 26 0 1 0 12 40 21 21 0 1 1-12-40z" fill="#1F3F66"/><text x="122" y="78" font-family="-apple-system,Segoe UI,sans-serif" font-size="13" font-weight="700" fill="#4A7DB5">z</text><text x="131" y="68" font-family="-apple-system,Segoe UI,sans-serif" font-size="10" font-weight="700" fill="#7DB1E6">z</text>';
-  s.innerHTML = '<defs><linearGradient id="sf" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4A7DB5"/><stop offset=".5" stop-color="#9CC4F0"/><stop offset="1" stop-color="#2F5E91"/></linearGradient></defs>' +
-    '<circle cx="100" cy="100" r="96" fill="rgba(247,249,252,.96)"/>' +
+  const ink = 'style="fill:var(--seal-ink)"', mark = 'style="fill:var(--seal-mark)"';
+  const mond = '<path d="M112 70a26 26 0 1 0 12 40 21 21 0 1 1-12-40z" ' + ink + '/><text x="122" y="78" font-family="-apple-system,Segoe UI,sans-serif" font-size="13" font-weight="700" ' + mark + '>z</text><text x="131" y="68" font-family="-apple-system,Segoe UI,sans-serif" font-size="10" font-weight="700" ' + mark + '>z</text>';
+  s.innerHTML = '<defs><linearGradient id="sf" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--seal-ring-1)"/><stop offset=".5" style="stop-color:var(--seal-ring-2)"/><stop offset="1" style="stop-color:var(--seal-ring-1)"/></linearGradient></defs>' +
+    '<circle cx="100" cy="100" r="96" style="fill:var(--seal-bg)"/>' +
     '<g class="ring" fill="none" stroke="url(#sf)" stroke-width="1">' + p + '</g>' +
-    '<circle cx="100" cy="100" r="60" fill="#F7F9FC" stroke="#2F5E91" stroke-width="1.5"/>' +
-    (art === 'ruhe' ? '<g class="hantel">' + mond + '</g>' : (art === 'leer' ? '' : '<g class="hantel">' + hantelPfade(100, 92, 1.12, '#1F3F66', '#4A7DB5') + '</g>')) +
-    '<text x="100" y="' + (art === 'leer' ? 105 : 134) + '" text-anchor="middle" font-family="-apple-system,Segoe UI,sans-serif" font-size="13" font-weight="700" fill="#1F3F66" letter-spacing="2.5">' +
+    '<circle cx="100" cy="100" r="60" style="fill:var(--seal-face);stroke:var(--seal-ring-1)" stroke-width="1.5"/>' +
+    (art === 'ruhe' ? '<g class="hantel">' + mond + '</g>' : (art === 'leer' ? '' : '<g class="hantel">' + hantelPfade(100, 92, 1.12, 'var(--seal-ink)', 'var(--seal-mark)').replace(/fill="(var\([^"]+\))"/g, 'style="fill:$1"') + '</g>')) +
+    '<text x="100" y="' + (art === 'leer' ? 105 : 134) + '" text-anchor="middle" font-family="-apple-system,Segoe UI,sans-serif" font-size="13" font-weight="700" ' + ink + ' letter-spacing="2.5">' +
     (art === 'ruhe' ? 'RESTED' : (art === 'leer' ? 'CLEARED' : 'LOGGED')) + '</text>';
 }
 function feiern(art, zusatz){
   const s = $('#siegel'), sp = $('#spruch');
   const [a, b] = zusatz || spruchWahl(art);
   sp.innerHTML = esc(a) + '<small>' + esc(b) + '</small>';
-  if (!BEWEGUNG){ toast(a + ' ' + b); return; }
+  if (!BEWEGUNG || !Kit.isOn('rep')){ toast(a + ' ' + b); return; }
   baueSiegel(art);
   s.classList.remove('los'); sp.classList.remove('los'); void s.getBoundingClientRect();
   s.classList.add('los'); sp.classList.add('los');
   if (art === 'gym'){
-    const cx = window.innerWidth / 2, cy = window.innerHeight * .44, farben = ['#7DB1E6', '#B9D5F2', '#4A7DB5', '#E3EEFA', '#2F5E91'];
+    const cx = window.innerWidth / 2, cy = window.innerHeight * .44, farben = ['var(--spark-a)', 'var(--spark-b)', 'var(--spark-c)', 'var(--gym)', 'var(--seal-ring-2)'];
     for (let i = 0; i < 16; i++){
       const f = h('i', { class: 'funke' }), w = Math.random() * Math.PI * 2, r = 110 + Math.random() * 90;
       f.style.left = cx + 'px'; f.style.top = cy + 'px'; f.style.background = farben[i % farben.length];
@@ -67,12 +68,13 @@ function buchen(){
     zusatz = ['Week target hit: ' + res.nachher + ' of ' + C.weeklyTarget + '.', 'Close the books on week ' + isoWeek(P(F.iso)) + '.'];
   const knopf = $('#logknopf'), kr = knopf ? knopf.getBoundingClientRect() : null;
   const iso = F.iso; F = null; render();
-  const k = $('#formkarte'); if (k && BEWEGUNG){ k.classList.remove('gebucht'); void k.offsetWidth; k.classList.add('gebucht'); }
+  const k = $('#formkarte'); if (k && BEWEGUNG && Kit.isOn('rep')){ k.classList.remove('gebucht'); void k.offsetWidth; k.classList.add('gebucht'); }
   feiern(art, zusatz);
-  if (art === 'gym' && kr && BEWEGUNG){
+  if (art === 'gym' && kr && BEWEGUNG && Kit.isOn('rep')){
     const p = h('div', { class: 'plus1' }, ['+1']); p.style.left = (kr.left + kr.width / 2) + 'px'; p.style.top = (kr.top - 6) + 'px';
     document.body.appendChild(p); setTimeout(() => p.remove(), 1300);
   }
 }
 ['dragover', 'drop'].forEach(ev => window.addEventListener(ev, e => { if (!e.defaultPrevented) e.preventDefault(); }));
+
 

@@ -1,0 +1,37 @@
+<!-- RISE · tool tokens: the colours only this app needs, one block per look -->
+<style id="tool-tokens">
+/* RISE · tool tokens. The colours only this tool needs (gym days, weeks on target, PRs, the booking seal),
+   one block per theme, next to the theme's own tokens. Nothing in the tool's CSS or code names a colour. */
+:root[data-theme="glass"]{
+  --gym:#7DB1E6; --gym-soft:rgba(125,177,230,.15); --gym-line:rgba(125,177,230,.42); --gym-text:#0A1520; --gym-deep:#A9CDF3;
+  --week-hit:#A9CDF3; --week-some:#3E6B9E; --week-none:rgba(255,255,255,.09);
+  --cell:rgba(255,255,255,.06); --cell-free:rgba(255,255,255,.17); --cell-dot:#FFFFFF; --cell-dot-gym:#0A1520;
+  --pr:#E9A93A; --pr-text:#211500; --pr-soft:rgba(233,169,58,.15); --pr-ink:#F3C468;
+  --special:#9CC4F0; --mark:rgba(243,196,104,.38);
+  --weight:#7DB1E6; --weight-area:.22;
+  --seal-bg:rgba(13,20,27,.94); --seal-face:#0F1A24; --seal-ring-1:#4A7DB5; --seal-ring-2:#A9CDF3; --seal-ink:#E6F1FC; --seal-mark:#7DB1E6;
+  --spark-a:#7DB1E6; --spark-b:#C9DDF5; --spark-c:#4A7DB5;
+}
+:root[data-theme="ember"]{
+  --gym:#FF7A2E; --gym-soft:rgba(255,122,46,.15); --gym-line:rgba(255,138,61,.45); --gym-text:#1E0A03; --gym-deep:#FFB347;
+  --week-hit:#FFC24A; --week-some:#B8431C; --week-none:rgba(255,190,160,.09);
+  --cell:rgba(255,190,160,.06); --cell-free:rgba(255,190,160,.17); --cell-dot:#FFF3D6; --cell-dot-gym:#1E0A03;
+  --pr:#FFC24A; --pr-text:#1E0A03; --pr-soft:rgba(255,194,74,.15); --pr-ink:#FFD27A;
+  --special:#FFB347; --mark:rgba(255,194,74,.35);
+  --weight:#FF8A3D; --weight-area:.24;
+  --seal-bg:rgba(20,10,7,.95); --seal-face:#1A0D08; --seal-ring-1:#E8401A; --seal-ring-2:#FFC24A; --seal-ink:#FFE9D6; --seal-mark:#FF7A2E;
+  --spark-a:#FF7A2E; --spark-b:#FFC24A; --spark-c:#E8401A;
+}
+:root[data-theme="prism"]{
+  --gym:#5B48F5; --gym-soft:rgba(91,72,245,.09); --gym-line:rgba(91,72,245,.32); --gym-text:#FFFFFF; --gym-deep:#4A37E8;
+  --week-hit:#14B88B; --week-some:#A99BFF; --week-none:rgba(20,22,40,.07);
+  --cell:rgba(20,22,40,.055); --cell-free:rgba(20,22,40,.16); --cell-dot:#12131C; --cell-dot-gym:#FFFFFF;
+  --pr:#F2A100; --pr-text:#2A1B00; --pr-soft:rgba(242,161,0,.13); --pr-ink:#A86A00;
+  --special:#4A37E8; --mark:rgba(242,161,0,.28);
+  --weight:#16B2E3; --weight-area:.18;
+  --seal-bg:rgba(255,255,255,.96); --seal-face:#FFFFFF; --seal-ring-1:#6E56FF; --seal-ring-2:#16B2E3; --seal-ink:#2A1F8F; --seal-mark:#5B48F5;
+  --spark-a:#6E56FF; --spark-b:#16B2E3; --spark-c:#FF5C8A;
+}
+/* the names the tool's code already used, pointing at the design tokens */
+:root{ --rund:var(--font-num); --sans:var(--font-ui); }
+</style>

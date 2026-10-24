@@ -27,17 +27,17 @@ function seiteJournal(el){
   suche.addEventListener('input', () => { clearTimeout(st); st = setTimeout(() => { S.q = suche.value; const pos = suche.selectionStart; render(); const n = $('#p-journal input[type=search]'); if (n){ n.focus(); try { n.setSelectionRange(pos, pos); } catch (e){} } }, 180); });
   el.appendChild(h('div', { class: 'jbar' }, [
     h('label', { class: 'suche' }, [h('span', { html: icon('<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>', 16) }), suche]),
-    h('button', { type: 'button', class: 'kbtn' + (S.pr ? ' on' : ''), 'aria-pressed': String(!!S.pr), title: 'Only days with a personal record, all years', onclick: () => { S.pr = !S.pr; S.sp = false; render(); } }, ['PRs']),
-    h('button', { type: 'button', class: 'kbtn' + (S.sp ? ' on' : ''), 'aria-pressed': String(!!S.sp), title: 'Only days with a Special entry, all years', onclick: () => { S.sp = !S.sp; S.pr = false; render(); } }, ['Special']),
-    S.pr ? h('button', { type: 'button', class: 'kbtn', title: 'Set or remove PR on every record by body weight', onclick: () => {
+    h('button', { type: 'button', class: 'btn btn--ghost btn--sm kbtn' + (S.pr ? ' on' : ''), 'aria-pressed': String(!!S.pr), title: 'Only days with a personal record, all years', onclick: () => { S.pr = !S.pr; S.sp = false; render(); } }, ['PRs']),
+    h('button', { type: 'button', class: 'btn btn--ghost btn--sm kbtn' + (S.sp ? ' on' : ''), 'aria-pressed': String(!!S.sp), title: 'Only days with a Special entry, all years', onclick: () => { S.sp = !S.sp; S.pr = false; render(); } }, ['Special']),
+    S.pr ? h('button', { type: 'button', class: 'btn btn--ghost btn--sm kbtn', title: 'Set or remove PR on every record by body weight', onclick: () => {
       const n = prNeu(); F = null;
       if (n){ touch(); toast(plural(n, 'day') + ' changed by the PR check.'); } else toast('Every PR is up to date.');
       render(); } }, ['Re-check PRs']) : null,
-    h('button', { type: 'button', class: 'kbtn', onclick: () => alle(true) }, ['Expand all']),
-    h('button', { type: 'button', class: 'kbtn', onclick: () => alle(false) }, ['Collapse all'])
+    h('button', { type: 'button', class: 'btn btn--ghost btn--sm kbtn', onclick: () => alle(true) }, ['Expand all']),
+    h('button', { type: 'button', class: 'btn btn--ghost btn--sm kbtn', onclick: () => alle(false) }, ['Collapse all'])
   ]));
   el.appendChild(h('p', { class: 'untertitel' }, [S.sp ? plural(days.length, 'day') + ' with a Special, all years' + (q ? ' matching \u201c' + q + '\u201d' : '') : S.pr ? plural(days.length, 'day') + ' with a PR or Rep-PR, all years' + (q ? ' matching \u201c' + q + '\u201d' : '') : q ? plural(days.length, 'day') + ' with \u201c' + q + '\u201d' : scopeLabel(true) + ', ' + plural(days.length, 'day')]));
-  if (!days.length){ el.appendChild(h('div', { class: 'blatt' }, [h('div', { class: 'leer' }, [S.sp ? 'No Special entries yet.' : S.pr ? 'No PRs yet. A record needs a body weight within ' + PR_TAGE + ' days to count.' : q ? 'Nothing matches.' : 'Nothing logged in this period.'])])); return; }
+  if (!days.length){ el.appendChild(h('div', { class: 'card blatt' }, [h('div', { class: 'leer' }, [S.sp ? 'No Special entries yet.' : S.pr ? 'No PRs yet. A record needs a body weight within ' + PR_TAGE + ' days to count.' : q ? 'Nothing matches.' : 'Nothing logged in this period.'])])); return; }
 
   const byMonth = {};
   days.forEach(p => { const m = p[0].slice(0, 7); (byMonth[m] = byMonth[m] || []).push(p); });

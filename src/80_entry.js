@@ -49,7 +49,7 @@ function seiteEntry(el){
   if (!F || F.iso !== iso) formLaden(iso);
   const geaendert = () => { F.changed = true; malStand(); };
 
-  const karte = h('div', { class: 'blatt', id: 'formkarte' });
+  const karte = h('div', { class: 'card blatt', id: 'formkarte' });
   karte.appendChild(h('div', { class: 'tagkopf' }, [
     h('button', { class: 'rund', type: 'button', 'aria-label': 'Previous week', title: 'Previous week', onclick: () => geheZuTag(ISO(add(d, -7))), html: icon('<path d="M15 6l-6 6 6 6"/>', 17) }),
     h('div', { class: 'titel' }, [h('b', {}, [DAYLONG[dow(d)]]), h('span', {}, [d.getUTCDate() + ' ' + MONTHS[d.getUTCMonth()] + ' ' + d.getUTCFullYear() + ', week ' + isoWeek(d)])]),
@@ -61,7 +61,7 @@ function seiteEntry(el){
     const t = ISO(add(wk0, i)), r = DATA.days[t];
     strip.appendChild(h('button', { type: 'button', role: 'tab', 'aria-selected': String(t === iso), class: (t === iso ? 'on' : '') + (t === TODAY ? ' heute' : ''),
       onclick: () => { if (t !== iso) geheZuTag(t); } }, [h('small', {}, [DAYNAMES[i]]), h('b', {}, [String(add(wk0, i).getUTCDate())]),
-      h('i', { style: { background: r && r.gym ? GYM : (r ? '#B8C1BC' : 'transparent') } })]));
+      h('i', { class: r && r.gym ? 'gym' : (r ? 'da' : null) })]));
   }
   karte.appendChild(strip);
 
@@ -124,7 +124,7 @@ function seiteEntry(el){
   const prReps = h('input', { type: 'text', inputmode: 'numeric', class: 'eingabe zahl', placeholder: '1', 'aria-label': 'Reps', autocomplete: 'off' });
   const prReihe = h('div', { class: 'prreihe', hidden: true }, [liftIn, h('div', { class: 'kgfeld' }, [prKg, h('em', {}, ['kg'])]), h('div', { class: 'kgfeld' }, [prReps, h('em', {}, ['reps'])]),
     h('datalist', { id: 'liftliste' }, liftsBekannt().map(l => h('option', { value: l }))),
-    h('button', { type: 'button', class: 'btn mini', onclick: () => prDazu() }, ['Add'])]);
+    h('button', { type: 'button', class: 'btn btn--primary btn--sm', onclick: () => prDazu() }, ['Add'])]);
   const prDazu = () => {
     const lift = liftIn.value.trim().replace(/\s+/g, ' '), kg = parseFloat(prKg.value.replace(',', '.'));
     if (!/^[A-Za-zÀ-ſ][A-Za-zÀ-ſ \-]*$/.test(lift)) return toast('Name the lift in letters, e.g. Deadlift', true);
@@ -144,13 +144,13 @@ function seiteEntry(el){
   form.appendChild(h('label', { class: 'feld' }, [h('span', {}, ['Journal', h('small', {}, ['one line per thought'])]), textfeld('journal', 5, 'How was the day?')]));
   karte.appendChild(form);
 
-  const logBtn = h('button', { class: 'btn log', type: 'button', id: 'logknopf', onclick: () => buchen() }, ['Log day']);
+  const logBtn = h('button', { class: 'btn btn--primary log', type: 'button', id: 'logknopf', onclick: () => buchen() }, ['Log day']);
   karte.appendChild(h('div', { class: 'buchen' }, [logBtn, h('span', { class: 'st' }, [h('i'), '']),
     h('span', { class: 'kbd' }, [/Mac|iPhone|iPad/.test(navigator.platform) ? '\u2318 Enter' : 'Ctrl Enter'])]));
   karte.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter'){ e.preventDefault(); if (F.changed) buchen(); } });
 
   /* the week beside it */
-  const woche = h('div', { class: 'blatt' });
+  const woche = h('div', { class: 'card blatt' });
   let n = 0; for (let i = 0; i < 7; i++){ const r = DATA.days[ISO(add(wk0, i))]; if (r && r.gym) n++; }
   const pips = h('span', { class: 'pips' });
   for (let i = 0; i < Math.max(C.weeklyTarget, n); i++) pips.appendChild(h('i', { class: i < n ? 'on' : '' }));

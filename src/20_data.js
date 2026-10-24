@@ -100,14 +100,7 @@ function mergeCandidates(){
   return out.sort((a, b) => a[0].name.toLowerCase() < b[0].name.toLowerCase() ? -1 : 1);
 }
 
-/* colours: Olympic bumper plates first, then a few deeper tones for the rarer splits */
-const GYM = '#7DB1E6';
-const PALETTE = ['#D0352E','#2B62C4','#E2A818','#2C9653','#D9622B','#5E4BA8','#0F8790','#8B5A2E','#3383D6','#B23462','#7A43A6','#6B7A86'];
-const PLATE = {
-  'full body':'#D0352E','upper body':'#2B62C4','lower body':'#E2A818','legs':'#2C9653','push':'#D9622B','pull':'#5E4BA8',
-  'chest':'#0F8790','back':'#8B5A2E','side delts + triceps':'#3383D6','triceps + side delts':'#3383D6','rear delts + biceps':'#B23462',
-  'biceps + rear delts':'#B23462','chest + back':'#0F8790','chest/back':'#1B7A73','delts + arms':'#7A43A6','shoulders/arms':'#7A43A6',
-  'chest + biceps':'#2B62C4','back + triceps':'#5E4BA8','push antagonist':'#D9622B','pull antagonist':'#3383D6'
-};
+/* colours: every split uses the theme's gym colour (token) */
+const GYM = 'var(--gym)';
 function colorOf(){ return GYM; }
 
