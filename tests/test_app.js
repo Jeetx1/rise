@@ -15,8 +15,9 @@ let ok = 0, bad = 0;
 const check = (cond, msg) => { if (cond) ok++; else { bad++; console.log('FAIL  ' + msg); } };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-function boot(){
-  const errors = [], blobs = [], names = [];
+function boot(o){
+  o = o || {};
+  const errors = [], blobs = [], names = [], sw = [];
   const vc = new VirtualConsole();
   vc.on('jsdomError', e => { if (!/Not implemented/.test(e.message)) errors.push(e.message); });
   const dom = new JSDOM(HTML, {
@@ -35,9 +36,14 @@ function boot(){
       w.open = () => null;
       w.scrollTo = () => {};
       w.HTMLAnchorElement.prototype.click = function(){ if (this.download) names.push(this.download); };
+      /* the offline cache: registrations of sw.js are recorded (jsdom cannot run it) */
+      Object.defineProperty(w.navigator, 'serviceWorker', { configurable: true,
+        value: { controller: null, register: u => { sw.push(u); return Promise.resolve({}); }, addEventListener(){} } });
+      /* what this browser kept from an earlier visit (the draft) */
+      for (const k in (o.storage || {})) w.localStorage.setItem(k, o.storage[k]);
     }
   });
-  return { dom, w: dom.window, d: dom.window.document, errors, blobs, names };
+  return { dom, w: dom.window, d: dom.window.document, errors, blobs, names, sw };
 }
 /* jsdom's Blob has no text()/arrayBuffer(): read it with the window's FileReader */
 const readBlob = (env, b, bin) => new Promise((res, rej) => { const fr = new env.w.FileReader();
@@ -297,6 +303,10 @@ function expected(data){
   check(/^\d{4}-\d\d-\d\d\.\d+$/.test(ver) && mb && mb.textContent === 'RISE · build ' + ver, 'file menu shows the build version ' + ver);
   env.d.body.dispatchEvent(new env.w.Event('pointerdown', { bubbles: true }));
   check(!!env.d.querySelector('link[rel="manifest"]'), 'hosted: the web manifest is linked');
+  check(env.sw.includes('sw.js'), 'hosted: the offline cache (sw.js) is registered');
+  const swText = fs.readFileSync(path.join(ROOT, 'docs/sw.js'), 'utf8');
+  check(swText.includes("const CACHE = 'rise-" + ver + "'"), 'sw.js cache carries the build version ' + ver);
+  check(/k\.startsWith\('rise-'\) && k !== CACHE/.test(swText), 'sw.js clears only its own caches (the origin is shared with CICO and EVEN)');
 
   /* 20. body weight chart: a dot per weigh-in only while they stay readable; a year of weigh-ins = line + latest dot */
   const viele = { app: 'training-log', v: 4, config: {}, settings: { theme: 'glass' }, days: {} };
@@ -312,7 +322,38 @@ function expected(data){
   const wd = env7.d.querySelectorAll('#p-overview .kpis .kpi')[2].querySelector('.delta');
   check(wd && /^\+/.test(wd.textContent) && wd.classList.contains('delta--flat'), 'a rising weight is shown neutrally, never as better or worse (' + (wd ? wd.textContent : 'none') + ')');
 
-  const errs = [...env.errors, ...env2.errors, ...env4.errors, ...env6.errors, ...env7.errors];
+  /* 21. the draft: text typed on Entry before "Log day" survives the iPhone closing the app in the background */
+  const DRAFT = 'trainingLog.draft.v1';
+  let env8 = boot(); await sleep(20);
+  await openJson(env8, FIXTURE, 'fixture.json');
+  await tab(env8, 'entry');
+  const jt8 = [...env8.d.querySelectorAll('#p-entry textarea')].pop();
+  jt8.value = 'Typed but not logged'; jt8.dispatchEvent(new env8.w.Event('input', { bubbles: true }));
+  Object.defineProperty(env8.d, 'hidden', { configurable: true, get: () => true });
+  env8.d.dispatchEvent(new env8.w.Event('visibilitychange'));
+  const dr8 = env8.w.localStorage.getItem(DRAFT);
+  check(!!dr8 && /Typed but not logged/.test(dr8), 'going to the background writes the draft at once, with the Entry text not logged yet');
+  let env9 = boot({ storage: { [DRAFT]: dr8 || '' } }); await sleep(20);
+  const rb9 = [...env9.d.querySelectorAll('#wahl button')].find(b => /Restore unsaved changes/.test(b.textContent));
+  check(!!rb9 && /not yet logged/.test(rb9.textContent), 'start screen offers the draft and names the Entry day not logged yet');
+  if (rb9){ rb9.click(); await sleep(30); }
+  const jt9 = [...env9.d.querySelectorAll('#p-entry textarea')].pop();
+  check(env9.d.getElementById('p-entry').classList.contains('on') && !!jt9 && jt9.value === 'Typed but not logged', 'restoring opens Entry with the typed text back on the form');
+  check(/not logged yet/.test((env9.d.querySelector('#p-entry .buchen .st') || { textContent: '' }).textContent), 'the restored text still waits for Log day');
+  check(env9.d.querySelector('#speichern').textContent === 'Save', 'Save blinks: the restored text is in no file yet');
+  env9.d.getElementById('speichern').click(); await sleep(80);
+  const s9 = env9.blobs.length ? await lastSavedJson(env9) : { days: {} };
+  check(s9.days['2026-10-14'] && /Typed but not logged/.test(s9.days['2026-10-14'].journal), 'Save logs the restored text into the file');
+  /* a browser that refuses the copy (storage full) says so instead of failing quietly */
+  let env10 = boot(); await sleep(20);
+  await openJson(env10, FIXTURE, 'fixture.json');
+  await tab(env10, 'entry');
+  env10.w.Storage.prototype.setItem = () => { throw new env10.w.DOMException('full', 'QuotaExceededError'); };
+  const jt10 = [...env10.d.querySelectorAll('#p-entry textarea')].pop();
+  jt10.value = 'Quota test'; jt10.dispatchEvent(new env10.w.Event('input', { bubbles: true })); await sleep(800);
+  check(/refused to keep a local copy/.test(toastText(env10)), 'a full browser storage is said out loud, not swallowed');
+
+  const errs = [...env.errors, ...env2.errors, ...env4.errors, ...env6.errors, ...env7.errors, ...env8.errors, ...env9.errors, ...env10.errors];
   check(errs.length === 0, 'no script errors' + (errs.length ? ': ' + errs.slice(0, 3).join(' | ') : ''));
   console.log((bad ? 'FAILED ' : 'OK ') + ok + ' of ' + (ok + bad) + ' checks passed');
   process.exit(bad ? 1 : 0);

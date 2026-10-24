@@ -35,11 +35,16 @@ function zeigeStart(){
   const dr = draftLesen();
   if (dr){
     const when = dr.at ? deDate(P(dr.at.slice(0, 10))) + ' ' + new Date(dr.at).toTimeString().slice(0, 5) : '';
+    const form = dr.form && dr.form.iso ? dr.form : null;
     wahl.appendChild(h('button', { type: 'button', class: 'draft', onclick: () => {
       DATA = normalize(dr.data); C = DATA.config; FILE = { name: dr.name || '', handle: null, folder: null };
-      starteApp(); S.dirty = true; malSpeichern(); toast('Unsaved changes restored. Save to put them into your data file.');
+      starteApp(); S.dirty = dr.dirty !== false || !!form; malSpeichern();
+      /* a day that was on the Entry form, not logged yet: back on the form, still waiting for Log day */
+      if (form){ S.tag = form.iso; F = Object.assign({}, form, { changed: true }); zeigeTab('entry'); }
+      toast('Unsaved changes restored' + (form ? ', ' + deShort(P(form.iso)) + ' is back on Entry, not logged yet' : '') + '. Save to put them into your data file.');
     } }, [ic('<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>'), h('span', {}, [h('b', {}, ['Restore unsaved changes']),
-      h('small', {}, ['From ' + when + (dr.name ? ', based on ' + dr.name : '') + '. They never reached a file.'])])]));
+      h('small', {}, ['From ' + when + (dr.name ? ', based on ' + dr.name : '') + '. They never reached a file.' +
+        (form ? ' Includes ' + deShort(P(form.iso)) + ' on Entry, not yet logged.' : '')])])]));
   }
   wahl.appendChild(h('button', { type: 'button', onclick: oeffnen }, [ic('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
     h('span', {}, [h('b', {}, ['Open your log']), h('small', {}, ['Your .json data file. The old Trainingslog HTML works too, its data is taken over.'])])]));

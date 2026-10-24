@@ -5,6 +5,6 @@ cd /d "%~dp0"
 if not exist docs mkdir docs
 copy /b /y src\01_head.html+src\02_dl_tokens.html+src\03_tokens.html+src\04_dl_components.html+src\05_styles.html+src\06_dl_effects.html+src\08_body.html+src\09_dl_kit.html+src\10_helpers.js+src\20_data.js+src\30_state.js+src\40_files.js+src\50_frame.js+src\60_overview.js+src\70_journal.js+src\72_mapping.js+src\80_entry.js+src\82_booking.js+src\84_pr.js+src\90_pdf.js+src\99_boot.js docs\index.html >nul
 if errorlevel 1 (echo Build failed. & pause & exit /b 1)
-for %%f in (manifest.webmanifest icon-180.png icon-192.png icon-512.png) do copy /b /y pwa\%%f docs\%%f >nul
+for %%f in (manifest.webmanifest sw.js icon-180.png icon-192.png icon-512.png) do copy /b /y pwa\%%f docs\%%f >nul
 echo Built docs\index.html from src\. Open it in Chrome or Edge to check.
 if "%~1"=="" pause

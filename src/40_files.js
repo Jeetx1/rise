@@ -1,11 +1,22 @@
 /* ================================================================ files */
 const DRAFT_KEY = 'trainingLog.draft.v1';
-let draftTimer = null;
+let draftTimer = null, draftVoll = false;
 function draftLesen(){ try { const d = JSON.parse(localStorage.getItem(DRAFT_KEY)); return d && d.data && d.data.days ? d : null; } catch (e){ return null; } }
-function draftSchreiben(){
+/* the draft holds the log and, while Entry has changes not logged yet, the form itself: an app the iPhone closes
+   in the background loses nothing. A browser that refuses the copy (storage full) says so once. */
+function draftSchreiben(sofort){
   clearTimeout(draftTimer);
-  draftTimer = setTimeout(() => { try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ at: new Date().toISOString(), name: FILE.name, data: DATA })); } catch (e){} }, 700);
+  const tu = () => {
+    if (!DATA || !(S.dirty || (F && F.changed))) return;
+    const form = F && F.changed ? { iso: F.iso, training: F.training, cardio: F.cardio, stretch: F.stretch, special: F.special, journal: F.journal, kg: F.kg } : null;
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ at: new Date().toISOString(), name: FILE.name, dirty: S.dirty, form, data: DATA })); draftVoll = false; }
+    catch (e){ if (!draftVoll){ draftVoll = true; toast('This browser refused to keep a local copy. Save to your file regularly.', true); } }
+  };
+  if (sofort) tu(); else draftTimer = setTimeout(tu, 700);
 }
+/* going to the background (another app, the lock button) writes the draft at once, not 0.7 s later */
+document.addEventListener('visibilitychange', () => { if (document.hidden) draftSchreiben(true); });
+window.addEventListener('pagehide', () => draftSchreiben(true));
 function draftWeg(){ clearTimeout(draftTimer); try { localStorage.removeItem(DRAFT_KEY); } catch (e){} }
 
 function stamp(){ return TODAY; }

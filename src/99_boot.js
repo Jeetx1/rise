@@ -9,8 +9,18 @@ Kit.init({
   toast: (m, o) => toast(m, !!(o && o.type === 'error'))
 });
 Kit.initDropdowns('select.select, select.eingabe');
-/* hosted (GitHub Pages): the web manifest for the home screen. Opened as a local file, nothing of this is loaded. */
-if (location.protocol === 'https:') document.head.appendChild(h('link', { rel: 'manifest', href: 'manifest.webmanifest' }));
+/* hosted (GitHub Pages): the web manifest for the home screen and the offline cache (sw.js), so the home-screen app
+   also opens without a signal. Opened as a local file, nothing of this is loaded. */
+if (location.protocol === 'https:'){
+  document.head.appendChild(h('link', { rel: 'manifest', href: 'manifest.webmanifest' }));
+  if ('serviceWorker' in navigator){
+    const hatteSchon = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (hatteSchon) toast('A new version is ready. Close and reopen the app to use it.'); });
+  }
+  /* asks the browser to keep this site's storage (the draft) rather than clear it when space runs low */
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+}
 zeigeStart();
 })();
 </script>

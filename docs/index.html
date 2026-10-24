@@ -2,7 +2,7 @@
 <html lang="en" data-theme="prism">
 <head>
 <meta charset="utf-8">
-<meta name="build" content="2026-10-24.2">
+<meta name="build" content="2026-10-24.3">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#F2F2F7">
 <meta name="color-scheme" content="light dark">
@@ -2651,12 +2651,23 @@ function ranked(obj){ return Object.keys(obj).map(k => ({ k, v: obj[k] })).sort(
 
 /* ================================================================ files */
 const DRAFT_KEY = 'trainingLog.draft.v1';
-let draftTimer = null;
+let draftTimer = null, draftVoll = false;
 function draftLesen(){ try { const d = JSON.parse(localStorage.getItem(DRAFT_KEY)); return d && d.data && d.data.days ? d : null; } catch (e){ return null; } }
-function draftSchreiben(){
+/* the draft holds the log and, while Entry has changes not logged yet, the form itself: an app the iPhone closes
+   in the background loses nothing. A browser that refuses the copy (storage full) says so once. */
+function draftSchreiben(sofort){
   clearTimeout(draftTimer);
-  draftTimer = setTimeout(() => { try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ at: new Date().toISOString(), name: FILE.name, data: DATA })); } catch (e){} }, 700);
+  const tu = () => {
+    if (!DATA || !(S.dirty || (F && F.changed))) return;
+    const form = F && F.changed ? { iso: F.iso, training: F.training, cardio: F.cardio, stretch: F.stretch, special: F.special, journal: F.journal, kg: F.kg } : null;
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ at: new Date().toISOString(), name: FILE.name, dirty: S.dirty, form, data: DATA })); draftVoll = false; }
+    catch (e){ if (!draftVoll){ draftVoll = true; toast('This browser refused to keep a local copy. Save to your file regularly.', true); } }
+  };
+  if (sofort) tu(); else draftTimer = setTimeout(tu, 700);
 }
+/* going to the background (another app, the lock button) writes the draft at once, not 0.7 s later */
+document.addEventListener('visibilitychange', () => { if (document.hidden) draftSchreiben(true); });
+window.addEventListener('pagehide', () => draftSchreiben(true));
 function draftWeg(){ clearTimeout(draftTimer); try { localStorage.removeItem(DRAFT_KEY); } catch (e){} }
 
 function stamp(){ return TODAY; }
@@ -2919,11 +2930,16 @@ function zeigeStart(){
   const dr = draftLesen();
   if (dr){
     const when = dr.at ? deDate(P(dr.at.slice(0, 10))) + ' ' + new Date(dr.at).toTimeString().slice(0, 5) : '';
+    const form = dr.form && dr.form.iso ? dr.form : null;
     wahl.appendChild(h('button', { type: 'button', class: 'draft', onclick: () => {
       DATA = normalize(dr.data); C = DATA.config; FILE = { name: dr.name || '', handle: null, folder: null };
-      starteApp(); S.dirty = true; malSpeichern(); toast('Unsaved changes restored. Save to put them into your data file.');
+      starteApp(); S.dirty = dr.dirty !== false || !!form; malSpeichern();
+      /* a day that was on the Entry form, not logged yet: back on the form, still waiting for Log day */
+      if (form){ S.tag = form.iso; F = Object.assign({}, form, { changed: true }); zeigeTab('entry'); }
+      toast('Unsaved changes restored' + (form ? ', ' + deShort(P(form.iso)) + ' is back on Entry, not logged yet' : '') + '. Save to put them into your data file.');
     } }, [ic('<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>'), h('span', {}, [h('b', {}, ['Restore unsaved changes']),
-      h('small', {}, ['From ' + when + (dr.name ? ', based on ' + dr.name : '') + '. They never reached a file.'])])]));
+      h('small', {}, ['From ' + when + (dr.name ? ', based on ' + dr.name : '') + '. They never reached a file.' +
+        (form ? ' Includes ' + deShort(P(form.iso)) + ' on Entry, not yet logged.' : '')])])]));
   }
   wahl.appendChild(h('button', { type: 'button', onclick: oeffnen }, [ic('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
     h('span', {}, [h('b', {}, ['Open your log']), h('small', {}, ['Your .json data file. The old Trainingslog HTML works too, its data is taken over.'])])]));
@@ -3759,7 +3775,7 @@ function seiteEntry(el){
   if (!S.tag) S.tag = TODAY;
   const iso = S.tag, d = P(iso), wk0 = monday(d);
   if (!F || F.iso !== iso) formLaden(iso);
-  const geaendert = () => { F.changed = true; malStand(); };
+  const geaendert = () => { F.changed = true; malStand(); draftSchreiben(); };
 
   const karte = h('div', { class: 'card blatt', id: 'formkarte' });
   karte.appendChild(h('div', { class: 'tagkopf' }, [
@@ -4384,8 +4400,18 @@ Kit.init({
   toast: (m, o) => toast(m, !!(o && o.type === 'error'))
 });
 Kit.initDropdowns('select.select, select.eingabe');
-/* hosted (GitHub Pages): the web manifest for the home screen. Opened as a local file, nothing of this is loaded. */
-if (location.protocol === 'https:') document.head.appendChild(h('link', { rel: 'manifest', href: 'manifest.webmanifest' }));
+/* hosted (GitHub Pages): the web manifest for the home screen and the offline cache (sw.js), so the home-screen app
+   also opens without a signal. Opened as a local file, nothing of this is loaded. */
+if (location.protocol === 'https:'){
+  document.head.appendChild(h('link', { rel: 'manifest', href: 'manifest.webmanifest' }));
+  if ('serviceWorker' in navigator){
+    const hatteSchon = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (hatteSchon) toast('A new version is ready. Close and reopen the app to use it.'); });
+  }
+  /* asks the browser to keep this site's storage (the draft) rather than clear it when space runs low */
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+}
 zeigeStart();
 })();
 </script>

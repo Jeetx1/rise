@@ -1,8 +1,9 @@
-# your real log and journal: never in the repo (a GitHub Pages repo is public)
+# your real log and journal: never in the repo (a GitHub Pages repo is public).
+# Every .json is blocked whatever its name (iPhone saves can add " 1" or " (1)"); only these two belong here:
 private/
-*TRAINING LOG*.json
-*_RISE.json
-*RISE COPY*.json
+*.json
+!package.json
+!tests/fixture.json
 *BACKUP*
 *_TRAINING REPORT*.pdf
 *_RISE REPORT*.pdf

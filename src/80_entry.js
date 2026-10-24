@@ -47,7 +47,7 @@ function seiteEntry(el){
   if (!S.tag) S.tag = TODAY;
   const iso = S.tag, d = P(iso), wk0 = monday(d);
   if (!F || F.iso !== iso) formLaden(iso);
-  const geaendert = () => { F.changed = true; malStand(); };
+  const geaendert = () => { F.changed = true; malStand(); draftSchreiben(); };
 
   const karte = h('div', { class: 'card blatt', id: 'formkarte' });
   karte.appendChild(h('div', { class: 'tagkopf' }, [
