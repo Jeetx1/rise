@@ -102,7 +102,7 @@ function seiteOverview(el, anim){
   el.appendChild(h('div', { class: 'card blatt' }, [h('div', { class: 'bk' }, [h('h2', {}, ['Body weight']), h('small', {}, [w.length ? plural(w.length, 'weigh-in') : scopeLabel()])]), gewichtChart(a, anim)]));
 
   const fk = h('div', { class: 'card blatt' });
-  fk.appendChild(h('div', { class: 'bk' }, [h('h2', {}, [S.focus === 'part' ? 'Body parts' : 'Workouts']), segment([['part', 'Body parts'], ['split', 'Workouts']], S.focus, v => { S.focus = v; S.firstPaint.overview = false; nachSchieber(render); }, 'Count by')]));
+  fk.appendChild(h('div', { class: 'bk' }, [h('h2', {}, [S.focus === 'part' ? 'Body parts' : 'Workouts']), segment([['part', 'Body parts'], ['split', 'Workouts']], S.focus, v => { S.focus = v; S.firstPaint.overview = false; render(); }, 'Count by')]));
   fk.appendChild(balkenListe(ranked(S.focus === 'part' ? a.part : a.split), S.focus === 'part', anim));
   const un = Object.keys(a.unmapped);
   if (S.focus === 'part' && un.length) fk.appendChild(h('div', { class: 'warn' }, [h('span', {}, ['No body parts yet: ' + un.join(', ')]),

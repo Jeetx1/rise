@@ -46,24 +46,30 @@ function zeigeStart(){
       h('small', {}, ['From ' + when + (dr.name ? ', based on ' + dr.name : '') + '. They never reached a file.' +
         (form ? ' Includes ' + deShort(P(form.iso)) + ' on Entry, not yet logged.' : '')])])]));
   }
-  wahl.appendChild(h('button', { type: 'button', onclick: oeffnen }, [ic('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
+  wahl.appendChild(h('button', { type: 'button', onclick: () => ohneEntwurf(oeffnen) }, [ic('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
     h('span', {}, [h('b', {}, ['Open your log']), h('small', {}, ['Your .json data file. The old Trainingslog HTML works too, its data is taken over.'])])]));
-  wahl.appendChild(h('button', { type: 'button', onclick: () => {
+  wahl.appendChild(h('button', { type: 'button', onclick: () => ohneEntwurf(() => {
     DATA = emptyData(); C = DATA.config; FILE = { name: '', handle: null, folder: null }; starteApp(); S.dirty = true; malSpeichern();
-  } }, [ic('<path d="M12 5v14M5 12h14"/>'), h('span', {}, [h('b', {}, ['Start an empty log']), h('small', {}, ['A fresh file, filled day by day under Data entry.'])])]));
+  }) }, [ic('<path d="M12 5v14M5 12h14"/>'), h('span', {}, [h('b', {}, ['Start an empty log']), h('small', {}, ['A fresh file, filled day by day under Data entry.'])])]));
   if (FSA) idbLesen('letzteDatei').then(hd => {
     if (!hd || !hd.getFile || $('#wahl [data-letzte]')) return;
-    const b = h('button', { type: 'button', 'data-letzte': '1', onclick: async () => {
+    const b = h('button', { type: 'button', 'data-letzte': '1', onclick: () => ohneEntwurf(async () => {
       try {
         if (hd.requestPermission && (await hd.requestPermission({ mode: 'readwrite' })) !== 'granted') return toast('No access to ' + hd.name + '. Open it with “Open your log”.', true);
         const f = await hd.getFile(); laden({ text: await f.text(), name: f.name, handle: hd });
       } catch (e){ toast('Could not open ' + hd.name + ': ' + (e && e.message || e), true); }
-    } }, [ic('<path d="M5 12h14M13 6l6 6-6 6"/>'), h('span', {}, [h('b', {}, ['Continue with ' + hd.name]), h('small', {}, ['The file you worked in last time. Save writes straight back into it.'])])]);
+    }) }, [ic('<path d="M5 12h14M13 6l6 6-6 6"/>'), h('span', {}, [h('b', {}, ['Continue with ' + hd.name]), h('small', {}, ['The file you worked in last time. Save writes straight back into it.'])])]);
     wahl.insertBefore(b, wahl.firstChild);
   });
   $('#startfuss').textContent = 'Nothing leaves this device. Saving writes a .json file wherever you choose' +
     (TOUCH ? ' (on iPhone: Save to Files in the share sheet).' : '; after that, Save writes straight back into it.') + ' You can also drop a file onto this window.';
   requestAnimationFrame(zeichneHintergrund);
+}
+/* unsaved changes on this device (the draft): anything on the start screen that opens another log asks first */
+function ohneEntwurf(fn){
+  if (!draftLesen()) return fn();
+  bestaetigen({ titel: 'Drop the unsaved changes?', lead: 'This device holds changes that never reached a file. Opening another log replaces them.',
+    liste: ['To keep them: Cancel, then Restore unsaved changes and Save.'], ja: 'Drop them', gefahr: true, beiJa: fn });
 }
 (function startDrop(){
   const st = $('#start'); let tiefe = 0;
@@ -75,7 +81,7 @@ function zeigeStart(){
     const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (!f) return;
     const it = e.dataTransfer.items && e.dataTransfer.items[0];
     const hdP = it && it.getAsFileSystemHandle ? it.getAsFileSystemHandle().catch(() => null) : Promise.resolve(null);
-    Promise.all([f.text(), hdP]).then(([t, hd]) => laden({ text: t, name: f.name, handle: hd && hd.kind === 'file' ? hd : null }));
+    Promise.all([f.text(), hdP]).then(([t, hd]) => ohneEntwurf(() => laden({ text: t, name: f.name, handle: hd && hd.kind === 'file' ? hd : null })));
   });
 })();
 
@@ -126,29 +132,37 @@ function malCtl(){
     });
     mSel.onchange = () => { S.month = parseInt(mSel.value, 10); S.firstPaint = {}; render(); };
     ctl.appendChild(pille(mSel));
-    ctl.appendChild(segment([['period', 'Month'], ['ytd', 'YTD']], S.mode, m => { S.mode = m; S.firstPaint = {}; nachSchieber(render); }, 'Period or year to date'));
+    ctl.appendChild(segment([['period', 'Month'], ['ytd', 'YTD']], S.mode, m => { S.mode = m; S.firstPaint = {}; render(); }, 'Period or year to date'));
   }
   ctl.appendChild(h('button', { type: 'button', class: 'btn btn--ghost btn--sm', onclick: () => pdfDialog(), html: icon('<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M9 15h6M9 18h4"/>', 16) + '<span class="btn__label">PDF</span>' }));
 }
-/* the shared segmented control: equal cells, the thumb only moves with translateX (--i of --n) */
+/* the shared segmented control: equal cells, the thumb only moves with translateX (--i of --n).
+   The page is drawn again at once (like CICO). A control that is part of that page is drawn anew too: it starts where
+   the old one was and slides on (SEG_VON), so the thumb still travels and the look's segment effect still plays. */
+const SEG_VON = {};
 function segment(optionen, wert, beiWahl, label){
   const s = h('div', { class: 'segmented', role: 'radiogroup', 'aria-label': label || null }), thumb = h('span', { class: 'segmented__thumb' }, [h('i')]);
   s.appendChild(thumb); s.style.setProperty('--n', optionen.length);
   const setI = i => s.style.setProperty('--i', i);
-  setI(Math.max(0, optionen.findIndex(o => o[0] === wert)));
+  const ziel = Math.max(0, optionen.findIndex(o => o[0] === wert)), von = label ? SEG_VON[label] : undefined;
+  if (BEWEGUNG && von !== undefined && von !== ziel){
+    setI(von);
+    requestAnimationFrame(() => requestAnimationFrame(() => { setI(ziel); if (s.isConnected) s.dispatchEvent(new CustomEvent('dl:seg', { bubbles: true })); }));
+  } else setI(ziel);
   const knoepfe = optionen.map(([id, t]) => h('button', { type: 'button', role: 'radio', class: id === wert ? 'is-active' : '', 'aria-checked': id === wert ? 'true' : 'false' }, [t]));
   knoepfe.forEach((k, i) => {
     k.onclick = () => {
       if (k.classList.contains('is-active')) return;
+      const vorher = knoepfe.findIndex(x => x.classList.contains('is-active'));
       knoepfe.forEach(x => { x.classList.toggle('is-active', x === k); x.setAttribute('aria-checked', x === k ? 'true' : 'false'); });
-      setI(i); s.dispatchEvent(new CustomEvent('dl:seg', { bubbles: true })); beiWahl(optionen[i][0]);
+      setI(i); s.dispatchEvent(new CustomEvent('dl:seg', { bubbles: true }));
+      if (label) SEG_VON[label] = vorher;
+      try { beiWahl(optionen[i][0]); } finally { if (label) delete SEG_VON[label]; }
     };
     s.appendChild(k);
   });
   return s;
 }
-/* the page is drawn again after the thumb has had its moment to travel */
-function nachSchieber(fn){ if (BEWEGUNG) setTimeout(fn, 190); else fn(); }
 function malWoche(){
   if (!DATA) return;
   const w0 = monday(P(TODAY)); let n = 0;
@@ -203,7 +217,7 @@ function goTo(tab, iso){
     panel = h('div', { class: 'menu dateimenu', role: 'menu' }, [
       punkt('<path d="M5 3h11l3 3v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M8 3v5h7V3"/>', 'Save', speichern),
       punkt('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>', 'Save a dated copy…', kopieSpeichern),
-      FSA ? punkt('<path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/>', 'Backup folder…', backupMenue) : null,
+      FSA && Kit.folder.can ? punkt('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>', 'Save to folder…', ordnerDialog) : null,
       punkt('<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>', 'Monthly report as PDF', pdfDialog),
       h('hr'),
       punkt('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>', 'Open another file', oeffnenAnderes),
@@ -223,10 +237,18 @@ function goTo(tab, iso){
 function oeffnenAnderes(){
   formBuchenStill();
   if (!S.dirty) return oeffnen();
-  bestaetigen({ titel: 'Open another file', lead: 'You have unsaved changes. Opening another file drops them from this window.',
-    liste: ['They stay restorable from the start screen until you save something else.'], ja: 'Open anyway', gefahr: true, beiJa: oeffnen });
+  const body = h('div', {}, [
+    h('p', { class: 'lead' }, ['You have unsaved changes. Opening another file drops them from this device.']),
+    h('div', { class: 'aktion drei' }, [
+      h('button', { class: 'btn btn--secondary', type: 'button', onclick: () => d.zu() }, ['Cancel']),
+      h('button', { class: 'btn btn--danger', type: 'button', onclick: () => { d.zu(); oeffnen(); } }, ['Open without saving']),
+      h('button', { class: 'btn btn--primary', type: 'button', onclick: async () => { d.zu(); await speichern(); if (!S.dirty) oeffnen(); } }, ['Save, then open'])
+    ])
+  ]);
+  const d = dialog('Open another file', null, body, { danger: true });
 }
 $('#speichern').addEventListener('click', speichern);
+{ const o = $('#ordner'); o.hidden = !(FSA && Kit.folder.can); o.addEventListener('click', ordnerDialog); }
 window.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's'){ e.preventDefault(); if (DATA && $('#shell').classList.contains('on')) speichern(); } });
 window.addEventListener('beforeunload', e => { if (S.dirty || (F && F.changed)){ e.preventDefault(); e.returnValue = ''; } });
 

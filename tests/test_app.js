@@ -24,8 +24,24 @@ function boot(o){
     url: 'https://localhost/', runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc,
     beforeParse(w){
       const D = w.Date;
-      class FakeDate extends D { constructor(...a){ if (a.length) super(...a); else super(FIXED); } static now(){ return FIXED; } }
+      /* the frozen clock; a test can move it on with env.w.__now (a new day) */
+      class FakeDate extends D { constructor(...a){ if (a.length) super(...a); else super(w.__now || FIXED); } static now(){ return w.__now || FIXED; } }
       w.Date = FakeDate;
+      /* Save to folder: o.ordner is the app folder the folder picker returns, o.oeffne the file the open picker returns */
+      if (o.ordner){
+        w.showDirectoryPicker = async () => o.ordner;
+        w.showOpenFilePicker = async () => [o.oeffne];
+        w.showSaveFilePicker = async x => fakeFile(x.suggestedName);
+      }
+      /* a computer with file pickers: open and save go through handles on a small in-memory disk (env.w.__disk) */
+      if (o.disk){
+        w.__disk = Object.assign({}, o.disk);
+        const mk = n => ({ name: n, kind: 'file', getFile: async () => ({ name: n, text: async () => w.__disk[n] || '' }),
+          createWritable: async () => { let s = ''; return { write: async b => { s += typeof b === 'string' ? b : await readBlobIn(w, b); }, close: async () => { w.__disk[n] = s; } }; },
+          queryPermission: async () => 'granted', requestPermission: async () => 'granted' });
+        w.showOpenFilePicker = async () => [mk(Object.keys(o.disk)[0])];
+        w.showSaveFilePicker = async x => mk(x.suggestedName);
+      }
       w.matchMedia = q => ({ matches: /reduce/.test(q), media: q, addEventListener(){}, removeEventListener(){}, addListener(){}, removeListener(){} });
       /* canvas: a context that accepts every call, so background, logo and PDF preview can draw */
       const ctx = new Proxy({}, { get: (t, k) => k === 'canvas' ? {} : (k in t ? t[k] : (k === 'measureText' ? () => ({ width: 10 }) :
@@ -45,6 +61,18 @@ function boot(o){
   });
   return { dom, w: dom.window, d: dom.window.document, errors, blobs, names, sw };
 }
+/* a small in-memory file system for Save to folder: files hold text, folders hold names → handles */
+const nichtDa = () => Object.assign(new Error('not found'), { name: 'NotFoundError' });
+function fakeFile(n, t){ const f = { kind: 'file', name: n, _t: t || '', getFile: async () => ({ name: n, text: async () => f._t }),
+  createWritable: async () => { let s = ''; return { write: async b => { s += String(b); }, close: async () => { f._t = s; } }; },
+  queryPermission: async () => 'granted', requestPermission: async () => 'granted' }; return f; }
+function fakeDir(n){ const kids = new Map(); const d = { kind: 'directory', name: n, kids, gone: false,
+  queryPermission: async () => 'granted', requestPermission: async () => 'granted', isSameEntry: async o => o === d,
+  getFileHandle: async (x, o) => { if (d.gone) throw nichtDa(); let f = kids.get(x); if (!f){ if (!(o && o.create)) throw nichtDa(); f = fakeFile(x); kids.set(x, f); } return f; },
+  getDirectoryHandle: async (x, o) => { let f = kids.get(x); if (!f){ if (!(o && o.create)) throw nichtDa(); f = fakeDir(x); kids.set(x, f); } return f; },
+  removeEntry: async x => { if (!kids.delete(x)) throw nichtDa(); },
+  values: () => { const it = kids.values(); return { next: async () => { if (d.gone) throw nichtDa(); return it.next(); }, [Symbol.asyncIterator](){ return this; } }; } }; return d; }
+function readBlobIn(w, b){ return new Promise((res, rej) => { const fr = new w.FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => rej(fr.error); fr.readAsText(b); }); }
 /* jsdom's Blob has no text()/arrayBuffer(): read it with the window's FileReader */
 const readBlob = (env, b, bin) => new Promise((res, rej) => { const fr = new env.w.FileReader();
   fr.onload = () => res(fr.result); fr.onerror = () => rej(fr.error); bin ? fr.readAsBinaryString(b) : fr.readAsText(b); });
@@ -226,6 +254,11 @@ function expected(data){
   check(/3 days with a PR/.test(pageText(env6, 'journal')), 'PRs lists every day with a PR or Rep-PR, all years');
   check(env6.d.querySelectorAll('#p-journal .chip.pr.rep').length === 1, 'Rep-PR has its own chip');
   jb('Re-check PRs').click(); await sleep(20);
+  const dlg6 = env6.d.getElementById('dlgroot');
+  check(/Re-check PRs/.test(dlg6.textContent) && /2 lines on 2 days would change/.test(dlg6.textContent) && /“PR Bench 140 kg” → “Bench 140 kg”/.test(dlg6.textContent),
+    're-check shows what would change before anything changes');
+  check(/3 days with a PR/.test(pageText(env6, 'journal')), 'nothing changes until Apply');
+  [...dlg6.querySelectorAll('button')].find(b => b.textContent === 'Apply').click(); await sleep(20);
   check(/2 days with a PR/.test(pageText(env6, 'journal')) && /2 days changed/.test(toastText(env6)), 're-check: bench without a body weight loses PR, squat gains it once the day has one');
   env6.d.getElementById('speichern').click(); await sleep(60);
   const prRe = await lastSavedJson(env6);
@@ -353,7 +386,101 @@ function expected(data){
   jt10.value = 'Quota test'; jt10.dispatchEvent(new env10.w.Event('input', { bubbles: true })); await sleep(800);
   check(/refused to keep a local copy/.test(toastText(env10)), 'a full browser storage is said out loud, not swallowed');
 
-  const errs = [...env.errors, ...env2.errors, ...env4.errors, ...env6.errors, ...env7.errors, ...env8.errors, ...env9.errors, ...env10.errors];
+  /* 22. a computer with file pickers: saved elsewhere (the iPhone) since it was opened → Save asks before replacing it */
+  const DISK = '2026-10-14_RISE.json';
+  let env11 = boot({ disk: { [DISK]: FIXTURE } }); await sleep(20);
+  [...env11.d.querySelectorAll('#wahl button')].find(b => /Open your log/.test(b.textContent)).click(); await sleep(60);
+  check(env11.d.getElementById('shell').classList.contains('on') && env11.d.getElementById('dateiname').textContent === DISK, 'computer: the log opens through the file picker');
+  const ANDERSWO = '2026-10-14T06:00:00.000Z', diskSaved = () => JSON.parse(env11.w.__disk[DISK]).saved;
+  { const o = JSON.parse(env11.w.__disk[DISK]); o.saved = ANDERSWO; env11.w.__disk[DISK] = JSON.stringify(o); }
+  const dlg11 = env11.d.getElementById('dlgroot'), knopf11 = t => [...dlg11.querySelectorAll('button')].find(b => b.textContent === t);
+  env11.d.getElementById('speichern').click(); await sleep(60);
+  check(/Saved elsewhere since you opened it/.test(dlg11.textContent), 'saved elsewhere since it was opened: Save asks first');
+  if (knopf11('Cancel')) knopf11('Cancel').click(); await sleep(30);
+  check(diskSaved() === ANDERSWO, 'Cancel leaves the other version untouched');
+  env11.d.getElementById('speichern').click(); await sleep(60);
+  if (knopf11('Replace it')) knopf11('Replace it').click(); await sleep(60);
+  check(diskSaved() !== ANDERSWO && Object.keys(JSON.parse(env11.w.__disk[DISK]).days).length === Object.keys(fx.days).length, 'Replace it writes this window’s version, every day in it');
+  env11.d.getElementById('speichern').click(); await sleep(60);
+  check(!knopf11('Replace it'), 'the next save goes straight in (nothing saved elsewhere since)');
+  /* Open another file with unsaved changes: offers to save first, and promises nothing it cannot keep */
+  await tab(env11, 'entry');
+  const jt11 = [...env11.d.querySelectorAll('#p-entry textarea')].pop();
+  jt11.value = 'Before another file'; jt11.dispatchEvent(new env11.w.Event('input', { bubbles: true }));
+  env11.d.getElementById('menuknopf').click(); await sleep(20);
+  [...env11.d.querySelectorAll('.menu__item')].find(b => /Open another file/.test(b.textContent)).click(); await sleep(20);
+  check(!!knopf11('Save, then open') && !!knopf11('Open without saving') && !/restorable/.test(dlg11.textContent), 'open another file with unsaved changes offers Save, then open');
+  if (knopf11('Cancel')) knopf11('Cancel').click(); await sleep(20);
+
+  /* 23. the start screen asks before another log replaces unsaved changes on this device */
+  let env12 = boot({ storage: { [DRAFT]: dr8 || '' } }); await sleep(20);
+  [...env12.d.querySelectorAll('#wahl button')].find(b => /Open your log/.test(b.textContent)).click(); await sleep(20);
+  check(/Drop the unsaved changes\?/.test(env12.d.getElementById('dlgroot').textContent), 'start screen: opening a log over unsaved changes asks first');
+  [...env12.d.querySelectorAll('#dlgroot button')].find(b => b.textContent === 'Cancel').click(); await sleep(20);
+  check(env12.d.getElementById('start').classList.contains('on') && !!env12.w.localStorage.getItem(DRAFT), 'Cancel keeps the unsaved changes');
+
+  /* 24. Re-check PRs only sets the tag (the line stays as typed), counts "3x8" as 8 reps, and leaves lines that are no lift untouched */
+  const prData2 = { v: 4, config: {}, days: {
+    '2026-09-30': { gym: true, training: 'Push', cardio: false, stretch: false, special: 'Bench 100 kg x5', journal: '', kg: null, kgSrc: null },
+    '2026-10-01': { gym: true, training: 'Legs', cardio: false, stretch: false, special: 'Deadlift 200,5kg felt good\nBench 100 kg 3x8\nBought new dumbbells 20 kg', journal: '', kg: 80, kgSrc: 'manual' } } };
+  let env13 = boot(); await sleep(20);
+  await openJson(env13, JSON.stringify(prData2), 'pr2.json');
+  await tab(env13, 'journal');
+  const jb13 = t => [...env13.d.querySelectorAll('#p-journal .jbar button')].find(b => b.textContent === t);
+  jb13('PRs').click(); await sleep(20);
+  jb13('Re-check PRs').click(); await sleep(20);
+  [...env13.d.querySelectorAll('#dlgroot button')].find(b => b.textContent === 'Apply').click(); await sleep(20);
+  env13.d.getElementById('speichern').click(); await sleep(60);
+  const s13 = await lastSavedJson(env13);
+  check(s13.days['2026-10-01'].special === 'PR Deadlift 200,5kg felt good\nRep-PR Bench 100 kg 3x8\nBought new dumbbells 20 kg', 're-check keeps each line as typed, 3x8 = 8 reps, no tag on a line that is no lift (got ' + JSON.stringify(s13.days['2026-10-01'].special) + ')');
+  check(s13.days['2026-09-30'].special === 'PR Bench 100 kg x5', 'a record with a body weight within 7 days counts');
+
+  /* 25. a typo in the weight keeps the weight logged before and says so */
+  await tab(env13, 'entry');
+  const kg13 = () => env13.d.querySelector('#p-entry .kgfeld input');
+  kg13().value = '81'; kg13().dispatchEvent(new env13.w.Event('input', { bubbles: true })); env13.d.getElementById('logknopf').click(); await sleep(30);
+  kg13().value = '8O'; kg13().dispatchEvent(new env13.w.Event('input', { bubbles: true })); env13.d.getElementById('logknopf').click(); await sleep(30);
+  check(/left out/.test([...env13.d.querySelectorAll('#toasts .toast')].map(t => t.textContent).join(' ')), 'a typo in the weight is said out loud');
+  env13.d.getElementById('speichern').click(); await sleep(60);
+  check((await lastSavedJson(env13)).days['2026-10-14'].kg === 81, 'and the weight logged before stays');
+
+  /* 26. an app left open over midnight moves on to the new day */
+  env13.w.__now = new Date(2026, 9, 15, 8, 0, 0).getTime();
+  env13.d.dispatchEvent(new env13.w.Event('visibilitychange')); await sleep(20);
+  check(/15 October 2026/.test(env13.d.querySelector('#p-entry .tagkopf .titel').textContent), 'an app left open over midnight moves on to the new day');
+
+  /* 27. Save to folder: today's file into the app folder, the files it replaces into its 02 BACKUP; the same day straight in;
+         today's file that is not this window's version asks first; a moved folder is said out loud; nothing is deleted */
+  const appO = fakeDir('RISE'), bkpO = fakeDir('02 BACKUP');
+  appO.kids.set('02 BACKUP', bkpO);
+  const gestern = fakeFile('2026-10-13_RISE.json', JSON.stringify(Object.assign(JSON.parse(FIXTURE), { saved: '2026-10-13T19:00:00.000Z' })));
+  appO.kids.set(gestern.name, gestern); appO.kids.set('notes.md', fakeFile('notes.md', '# pointer'));
+  const namen = dd => [...dd.kids.keys()].sort().join('|');
+  let env14 = boot({ ordner: appO, oeffne: gestern }); await sleep(20);
+  const knopf14 = t => [...env14.d.querySelectorAll('#dlgroot button')].find(b => b.textContent === t);
+  [...env14.d.querySelectorAll('#wahl button')].find(b => /Open your log/.test(b.textContent)).click(); await sleep(60);
+  check(!env14.d.getElementById('ordner').hidden, 'Save to folder button on a computer');
+  env14.d.getElementById('ordner').click(); await sleep(20);
+  knopf14('Choose…').click(); await sleep(60);
+  check(/Backups go to “02 BACKUP”/.test(toastText(env14)), 'Save to folder: choosing the app folder finds its 02 BACKUP by itself');
+  knopf14('Save now').click(); await sleep(80);
+  check(namen(appO) === '02 BACKUP|2026-10-14_RISE.json|notes.md' && namen(bkpO) === '2026-10-13_RISE.json',
+    'today’s file goes into the app folder, the one it replaces into 02 BACKUP, nothing else is touched (' + namen(appO) + ' / ' + namen(bkpO) + ')');
+  check(Object.keys(JSON.parse(appO.kids.get('2026-10-14_RISE.json')._t).days).length === Object.keys(fx.days).length, 'every day is in today’s file');
+  env14.d.getElementById('speichern').click(); await sleep(80);
+  check(!knopf14('Replace it') && namen(appO) === '02 BACKUP|2026-10-14_RISE.json|notes.md', 'saving again the same day goes straight into today’s file');
+  { const f = appO.kids.get('2026-10-14_RISE.json'), o = JSON.parse(f._t); o.saved = '2026-10-14T05:00:00.000Z'; f._t = JSON.stringify(o); }
+  env14.d.getElementById('speichern').click(); await sleep(60);
+  check(/Today’s file is already there/.test(env14.d.getElementById('dlgroot').textContent), 'today’s file that is not this window’s version: Save asks first');
+  if (knopf14('Replace it')) knopf14('Replace it').click(); await sleep(80);
+  check(namen(bkpO) === '2026-10-13_RISE.json|2026-10-14_RISE.json' && JSON.parse(appO.kids.get('2026-10-14_RISE.json')._t).saved !== '2026-10-14T05:00:00.000Z',
+    'Replace it: the old one goes to 02 BACKUP first, nothing is deleted (' + namen(bkpO) + ')');
+  appO.gone = true;
+  env14.d.getElementById('speichern').click(); await sleep(60);
+  check(/cannot be found any more/.test(env14.d.getElementById('toasts').textContent) && /Save to folder/.test(env14.d.getElementById('dlgroot').textContent),
+    'a folder that was moved or renamed: the app says so and asks for it again');
+
+  const errs = [...env.errors, ...env2.errors, ...env4.errors, ...env6.errors, ...env7.errors, ...env8.errors, ...env9.errors, ...env10.errors, ...env11.errors, ...env12.errors, ...env13.errors, ...env14.errors];
   check(errs.length === 0, 'no script errors' + (errs.length ? ': ' + errs.slice(0, 3).join(' | ') : ''));
   console.log((bad ? 'FAILED ' : 'OK ') + ok + ' of ' + (ok + bad) + ' checks passed');
   process.exit(bad ? 1 : 0);

@@ -378,6 +378,12 @@ mark{background:var(--mark);color:inherit;border-radius:3px;padding:0 1px}
 /* ---------------------------------------------------------------- dialogs: the shared modal, plus what the tool puts inside */
 .modal .db{min-width:0}
 .aktion{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:22px}
+/* Save to folder: one row per folder (name + Choose/Change) */
+.ordnerzeile{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid var(--hairline)}
+.ordnerzeile small{display:block;color:var(--text-3);font-size:12px;margin-bottom:2px}
+.ordnerzeile b{font-weight:600;color:var(--text);overflow-wrap:anywhere}
+/* three choices (saved elsewhere, open another file): stacked full width, the main one on top (three never fit one row of a dialog) */
+.aktion.drei{flex-direction:column-reverse;align-items:stretch}.aktion.drei .btn{width:100%}
 .lead{font-size:14px;line-height:1.55;margin:0 0 12px;color:var(--text-2)}
 .liste{margin:0;padding-left:18px;font-size:13px;line-height:1.65;color:var(--text-2)}
 .gefahrnotiz{background:var(--danger-soft);border:var(--bw) solid var(--danger-line);padding:10px 12px;border-radius:var(--r-control);font-size:13px;color:var(--text);line-height:1.55;margin-bottom:12px}

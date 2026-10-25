@@ -9,6 +9,15 @@ Kit.init({
   toast: (m, o) => toast(m, !!(o && o.type === 'error'))
 });
 Kit.initDropdowns('select.select, select.eingabe');
+/* an app left open over midnight moves on to the new day; a day with changes on Entry not logged yet stays on the form */
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden || !DATA) return;
+  const neu = lokalHeute(); if (neu === TODAY) return;
+  const alt = TODAY; TODAY = neu;
+  if (S.tag === alt && !(F && F.changed)){ S.tag = neu; F = null; }
+  malWoche();
+  if ($('#shell').classList.contains('on')){ malCtl(); render(); }
+});
 /* hosted (GitHub Pages): the web manifest for the home screen and the offline cache (sw.js), so the home-screen app
    also opens without a signal. Opened as a local file, nothing of this is loaded. */
 if (location.protocol === 'https:'){

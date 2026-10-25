@@ -73,7 +73,7 @@ function isoWeek(d){
   return 1 + Math.round((t - f) / (7 * DAY));
 }
 function lokalHeute(){ const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
-const TODAY = lokalHeute();
+let TODAY = lokalHeute();   /* moves on when the app is opened again on a new day (99_boot.js) */
 const DAYNAMES = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MSHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];

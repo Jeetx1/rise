@@ -65,7 +65,8 @@ function laden(got){
   let r;
   try { r = lesen(got.text, got.name); } catch (e){ toast(e.message, true); return; }
   DATA = r.data; C = DATA.config;
-  FILE = { name: r.from === 'json' ? got.name : '', handle: r.from === 'json' ? got.handle : null, folder: got.handle || null };
+  /* basis: the file's own "saved" stamp when it was opened; Save compares it with the file on disk (fremdGespeichert) */
+  FILE = { name: r.from === 'json' ? got.name : '', handle: r.from === 'json' ? got.handle : null, folder: got.handle || null, basis: r.from === 'json' ? (DATA.saved || null) : undefined };
   if (FILE.handle) idbSchreiben('letzteDatei', FILE.handle);
   starteApp();
   if (DATA.settings && DATA.settings.theme) Kit.set(DATA.settings.theme, 'file');
@@ -122,56 +123,81 @@ async function schreibrecht(hd){
   return (await hd.requestPermission({ mode: 'readwrite' })) === 'granted';
 }
 async function schreibeHandle(hd, inhalt){ const w = await hd.createWritable(); await w.write(inhalt); await w.close(); }
+/* Was the file saved again since this window opened it (on the iPhone, in another window)? Its own "saved" stamp is
+   compared with the one this window started from, so a OneDrive sync that only touches the file date does not count.
+   null: nothing to worry about (also when the file is gone or cannot be read with the access we have). */
+async function fremdGespeichert(hd){
+  if (FILE.basis === undefined) return null;
+  let text;
+  try { text = await (await hd.getFile()).text(); } catch (e){ return null; }
+  try { const o = JSON.parse(text), s = o && o.saved || null; return s !== (FILE.basis || null) ? { saved: s } : null; }
+  catch (e){ return { saved: null }; }
+}
+const wannText = s => s ? new Date(s).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+/* three choices, the safe one on top: 'ersetzen' (replace it), 'neu' (save as a new file) or null (cancel) */
+function dreiWege(titel, text, hinweis){
+  return new Promise(ok => {
+    let wahl = null;
+    const body = h('div', {}, [
+      h('p', { class: 'lead' }, [text]),
+      hinweis ? h('p', { class: 'hinweis', style: { margin: 0 } }, [hinweis]) : null,
+      h('div', { class: 'aktion drei' }, [
+        h('button', { class: 'btn btn--secondary', type: 'button', onclick: () => d.zu() }, ['Cancel']),
+        h('button', { class: 'btn btn--danger', type: 'button', onclick: () => { wahl = 'ersetzen'; d.zu(); } }, ['Replace it']),
+        h('button', { class: 'btn btn--primary', type: 'button', onclick: () => { wahl = 'neu'; d.zu(); } }, ['Save as a new file'])
+      ])
+    ]);
+    const d = dialog(titel, 'Your changes here are not lost either way', body, { danger: true, fokus: '.aktion .btn', beimSchliessen: () => ok(wahl) });
+  });
+}
+function konfliktFrage(name, saved){
+  return dreiWege('Saved elsewhere since you opened it', name + ' was saved again' + (saved ? ' on ' + wannText(saved) : '') + ' after you opened it here, on your iPhone or in another window. Saving now would replace that version.');
+}
+/* Save to folder asks when the app folder holds a newer data file, or today's file that is not this window's version */
+function ordnerFrage(f){
+  const liste = f.files.map(x => x.name + (x.stamp ? ' (saved ' + wannText(x.stamp) + ')' : '')).join(', ');
+  return f.kind === 'newer'
+    ? dreiWege('Saved elsewhere since you opened it', liste + ' in \u201c' + f.folder + '\u201d was saved after the version you have here, on your iPhone or in another window.',
+        'Replace it: that file goes to the backup folder and this version takes its place. Save as a new file: this version goes next to it as a copy.')
+    : dreiWege('Today\u2019s file is already there', liste + ' is already in \u201c' + f.folder + '\u201d and is not the version you have here.',
+        'Replace it: the old one goes to the backup folder. Save as a new file: this version goes next to it as a copy.');
+}
+/* the data files a save to the app folder replaces (moved to the backup folder): today's name, the old names, the
+   " 1" / " (1)" an iPhone save adds, the daily backups of earlier builds. Copies stay where they are */
+function istDatendatei(n){ return /\.json$/i.test(n) && !/COPY/i.test(n) && (/_RISE( BACKUP)?( \d+| \(\d+\))?\.json$/i.test(n) || /TRAINING LOG (DATA|BACKUP)/i.test(n)); }
+function stempel(t){ try { return JSON.parse(t).saved || null; } catch (e){ return null; } }
+function liestZurueck(t){ try { return Object.keys(normalizeKopie(t).days).length === Object.keys(DATA.days).length; } catch (e){ return false; } }
+function normalizeKopie(t){ const merk = KG_CLEANED, d = normalize(JSON.parse(t)); KG_CLEANED = merk; return d; }
 
-/* the daily backup: the first save of each day drops a dated copy into a folder you picked once */
-let backupOrdner = null, backupGefragt = false;
-const backupMoeglich = () => FSA && typeof window.showDirectoryPicker === 'function';
-async function backupWaehlen(){
-  if (!backupMoeglich()){ toast('This browser cannot write into a folder. Backups need Chrome or Edge on a computer.', true); return false; }
-  try {
-    const ordner = await window.showDirectoryPicker({ mode: 'readwrite', id: 'trainingslog-backup' });
-    backupOrdner = ordner; await idbSchreiben('backupOrdner', ordner);
-    return true;
-  } catch (e){ if (e && e.name !== 'AbortError') toast('No backup folder set: ' + e.message, true); return false; }
-}
-async function sicherung(inhalt){
-  if (!backupMoeglich()) return null;
-  if (!backupOrdner) backupOrdner = await idbLesen('backupOrdner');
-  if (!backupOrdner) return { keinOrdner: true };
-  try {
-    if (!(await schreibrecht(backupOrdner))) return { fehler: 'Backup skipped: no access to the backup folder.' };
-    const name = TODAY + '_RISE BACKUP.json';
-    try { await backupOrdner.getFileHandle(name); return { schon: true, name }; }
-    catch (e){ if (e && e.name !== 'NotFoundError') throw e; }
-    const fh = await backupOrdner.getFileHandle(name, { create: true });
-    await schreibeHandle(fh, inhalt);
-    return { ok: true, name };
-  } catch (e){ return { fehler: 'Backup failed: ' + (e && e.message || e) }; }
-}
-function backupFrage(inhalt, gespeichertIn){
-  if (backupGefragt) return toast('Saved to ' + gespeichertIn);
-  backupGefragt = true;
+/* Save to folder (desktop): the app folder (e.g. OneDrive \u203a APPS \u203a RISE) and the backup folder (its 02 BACKUP).
+   Replaces the daily backup of earlier builds: every save now moves the file it replaces into the backup folder. */
+async function ordnerDialog(){
+  if (!Kit.folder.can) return toast('Saving to folders needs Chrome or Edge on a computer.', true);
+  const app = await Kit.folder.get(), bk = await Kit.folder.backup();
+  const waehle = async (wahl, was, alt) => {
+    let neu;
+    try { neu = await wahl(); }
+    catch (e){ if (!e || e.name !== 'AbortError') toast(e && e.message || 'This browser did not give access to that folder.', true); return; }
+    const bk2 = await Kit.folder.backup();
+    toast(was + ' folder: \u201c' + neu.name + '\u201d' + (alt && alt !== neu.name ? ' (was \u201c' + alt + '\u201d)' : '') + '.' +
+      (was === 'App' ? (bk2 ? ' Backups go to \u201c' + bk2.name + '\u201d.' : ' It has no 02 BACKUP: choose a backup folder too.') : ''));
+    d.zu(); setTimeout(ordnerDialog, BEWEGUNG ? 280 : 0);
+  };
+  const zeile = (titel, ordner, leer, an, fn) => h('div', { class: 'ordnerzeile' }, [
+    h('div', {}, [h('small', {}, [titel]), h('b', {}, [ordner ? '\u201c' + ordner.name + '\u201d' : leer])]),
+    h('button', { class: 'btn btn--secondary btn--sm', type: 'button', disabled: an ? null : true, onclick: fn }, [ordner ? 'Change\u2026' : 'Choose\u2026'])]);
   const body = h('div', {}, [
-    h('p', { class: 'lead' }, ['Saved to ' + gespeichertIn + '. Want a daily backup on top?']),
-    h('p', { class: 'hinweis', style: { margin: 0 } }, ['Pick a folder once (OneDrive works well). The first save of each day then leaves a copy there, named like ' + TODAY + '_RISE BACKUP.json. Later saves that day only update your data file.']),
+    h('p', { class: 'lead' }, ['Save writes today\u2019s file into the app folder and moves the file it replaces into the backup folder. Nothing is deleted.']),
+    zeile('App folder', app, 'Not chosen yet (e.g. OneDrive \u203a APPS \u203a RISE)', true, () => waehle(Kit.folder.choose, 'App', app && app.name)),
+    zeile('Backup folder', bk, app ? 'Not chosen yet (e.g. 02 BACKUP)' : 'Choose the app folder first', !!app, () => waehle(Kit.folder.chooseBackup, 'Backup', bk && bk.name)),
+    h('p', { class: 'hinweis', style: { margin: '12px 0 0' } }, ['A browser only shows a folder\u2019s name, not where it is. If you move or rename a folder, the app says so and you choose it again. The github.io app and a copy opened from this computer each remember their own folders.']),
     h('div', { class: 'aktion' }, [
-      h('button', { class: 'btn btn--secondary', type: 'button', onclick: () => d.zu() }, ['Not now']),
-      h('button', { class: 'btn btn--primary', type: 'button', onclick: async () => {
-        d.zu();
-        if (!(await backupWaehlen())) return;
-        const bk = await sicherung(inhalt);
-        if (bk && bk.ok) toast('Backups go to \u201c' + backupOrdner.name + '\u201d. Today\u2019s copy is there.');
-        else if (bk && bk.fehler) toast(bk.fehler, true);
-      } }, ['Choose folder'])
+      app ? h('button', { class: 'btn btn--ghost', type: 'button', style: { marginRight: 'auto' }, onclick: async () => { await Kit.folder.forget(); d.zu(); toast('Folders forgotten. Save writes back into the opened file again.'); } }, ['Stop using folders']) : null,
+      h('button', { class: 'btn btn--secondary', type: 'button', onclick: () => d.zu() }, ['Close']),
+      h('button', { class: 'btn btn--primary', type: 'button', disabled: app ? null : true, onclick: () => { d.zu(); speichern(); } }, ['Save now'])
     ])
   ]);
-  const d = dialog('Daily backup', 'One copy per day, in a folder of your choice', body);
-}
-async function backupMenue(){
-  if (!backupMoeglich()) return toast('Backups need Chrome or Edge on a computer.', true);
-  const vorher = backupOrdner || await idbLesen('backupOrdner');
-  if (!(await backupWaehlen())) return;
-  toast('Backups now go to \u201c' + backupOrdner.name + '\u201d' + (vorher && vorher.name !== backupOrdner.name ? ' (was \u201c' + vorher.name + '\u201d)' : '') + '.');
+  const d = dialog('Save to folder', app ? null : 'Pick the app folder once; its 02 BACKUP is used by itself', body);
 }
 
 function dateiText(){
@@ -184,20 +210,44 @@ function dateiText(){
   return { text, before };
 }
 function gespeichert(){
-  S.dirty = false; draftWeg(); malSpeichern(); malDateiname();
+  S.dirty = false; FILE.basis = DATA.saved || null; draftWeg(); malSpeichern(); malDateiname();
   document.dispatchEvent(new CustomEvent('dl:saved'));
   if (S.tab === 'entry') malStand();
 }
-/* Save: straight back into the file you opened. Only a file that has never been saved asks where to go. */
+/* Save: into the app folder once one is chosen (Save to folder), else straight back into the file you opened.
+   Only a file that has never been saved asks where to go. */
 async function speichern(){
   if (!DATA) return;
   if (F && F.changed){ formSchreiben(); if (S.tab === 'entry') render(); }
   const t = dateiText(); if (!t) return;
+  if (FSA && Kit.folder.can && await Kit.folder.get()){
+    let r;
+    try {
+      r = await Kit.folder.save({ name: dataName(), text: t.text, copyName: copyName(), basis: FILE.basis,
+        isData: istDatendatei, stamp: stempel, check: liestZurueck, ask: ordnerFrage });
+    } catch (e){ DATA.saved = t.before; toast('Not saved to the folder: ' + (e && e.message || e), true); return; }
+    if (r.cancel){ DATA.saved = t.before; return; }
+    if (r.missing || r.denied){
+      DATA.saved = t.before;
+      toast(r.missing ? '“' + r.folder + '” cannot be found any more. Moved or renamed? Choose it again.' : 'No access to “' + r.folder + '”. Choose it again.', true);
+      return ordnerDialog();
+    }
+    FILE.handle = r.handle; FILE.folder = r.handle; FILE.name = r.name; idbSchreiben('letzteDatei', r.handle);
+    gespeichert();
+    toast('Saved to ' + r.folder + ': ' + r.name + (r.moved.length ? '. Moved to ' + r.backup + ': ' + r.moved.map(m => m[0]).join(', ') : '') +
+      (r.noBackup ? '. Choose a backup folder to move the older files.' : ''));
+    return;
+  }
   if (FSA){
     try {
-      let hd = FILE.handle && neuerName(FILE.name) ? FILE.handle : null;
+      let hd = FILE.handle && neuerName(FILE.name) ? FILE.handle : null, neu = false;
+      if (hd){
+        const f = await fremdGespeichert(hd);
+        if (f){ const w = await konfliktFrage(hd.name, f.saved); if (!w){ DATA.saved = t.before; return; } if (w === 'neu'){ hd = null; neu = true; } }
+      }
       if (!hd){
-        const opts = { suggestedName: dataName(), types: [{ description: 'RISE data', accept: { 'application/json': ['.json'] } }], id: 'trainingslog' };
+        /* "Save as a new file" after a conflict suggests the copy name, never the other version's name */
+        const opts = { suggestedName: neu ? copyName() : dataName(), types: [{ description: 'RISE data', accept: { 'application/json': ['.json'] } }], id: 'trainingslog' };
         if (FILE.folder) opts.startIn = FILE.folder;
         hd = await window.showSaveFilePicker(opts);
       }
@@ -205,11 +255,7 @@ async function speichern(){
       await schreibeHandle(hd, t.text);
       FILE.handle = hd; FILE.folder = hd; FILE.name = hd.name; idbSchreiben('letzteDatei', hd);
       gespeichert();
-      const bk = await sicherung(t.text);
-      if (bk && bk.ok) toast('Saved to ' + hd.name + '. Today\u2019s backup: ' + bk.name);
-      else if (bk && bk.fehler) toast('Saved to ' + hd.name + '. ' + bk.fehler, true);
-      else if (bk && bk.keinOrdner) backupFrage(t.text, hd.name);
-      else toast('Saved to ' + hd.name);
+      toast('Saved to ' + hd.name);
     } catch (e){
       DATA.saved = t.before;
       if (!(e && e.name === 'AbortError')) toast('Could not save: ' + (e && e.message || e), true);
@@ -233,7 +279,7 @@ async function kopieSpeichern(){
   if (r.ok) toast('Copy saved as ' + r.name);
   else if (!r.abort) toast('Could not save the copy: ' + (r.err && r.err.message || 'unknown error'), true);
 }
-function touch(){ S.dirty = true; malSpeichern(); draftSchreiben(); malWoche(); if (S.tab === 'entry') malStand(); }
+function touch(){ S.dirty = true; PR_STAND++; malSpeichern(); draftSchreiben(); malWoche(); if (S.tab === 'entry') malStand(); }
 function malSpeichern(){
   const b = $('#speichern'); if (!b) return;
   b.classList.toggle('is-dirty', S.dirty);

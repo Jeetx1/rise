@@ -30,9 +30,14 @@ function seiteJournal(el){
     h('button', { type: 'button', class: 'btn btn--ghost btn--sm kbtn' + (S.pr ? ' on' : ''), 'aria-pressed': String(!!S.pr), title: 'Only days with a personal record, all years', onclick: () => { S.pr = !S.pr; S.sp = false; render(); } }, ['PRs']),
     h('button', { type: 'button', class: 'btn btn--ghost btn--sm kbtn' + (S.sp ? ' on' : ''), 'aria-pressed': String(!!S.sp), title: 'Only days with a Special entry, all years', onclick: () => { S.sp = !S.sp; S.pr = false; render(); } }, ['Special']),
     S.pr ? h('button', { type: 'button', class: 'btn btn--ghost btn--sm kbtn', title: 'Set or remove PR on every record by body weight', onclick: () => {
-      const n = prNeu(); F = null;
-      if (n){ touch(); toast(plural(n, 'day') + ' changed by the PR check.'); } else toast('Every PR is up to date.');
-      render(); } }, ['Re-check PRs']) : null,
+      /* shows what would change first: the check touches every year */
+      const ae = prPruefen();
+      if (!ae.length) return toast('Every PR is up to date.');
+      const zeilen = [].concat(...ae.map(a => a.zeilen.map(z => deDate(P(a.iso)) + ': “' + z.vorher + '” → “' + z.nachher + '”')));
+      bestaetigen({ titel: 'Re-check PRs', lead: plural(zeilen.length, 'line') + ' on ' + plural(ae.length, 'day') + ' would change. Only the PR tag changes; the rest of each line stays as you typed it.',
+        liste: zeilen.length > 8 ? zeilen.slice(0, 8).concat(['… and ' + (zeilen.length - 8) + ' more']) : zeilen,
+        ja: 'Apply', beiJa: () => { const n = prAnwenden(ae); F = null; touch(); toast(plural(n, 'day') + ' changed by the PR check. Save to keep it.'); render(); } });
+    } }, ['Re-check PRs']) : null,
     h('button', { type: 'button', class: 'btn btn--ghost btn--sm kbtn', onclick: () => alle(true) }, ['Expand all']),
     h('button', { type: 'button', class: 'btn btn--ghost btn--sm kbtn', onclick: () => alle(false) }, ['Collapse all'])
   ]));

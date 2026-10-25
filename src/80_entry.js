@@ -20,7 +20,12 @@ function formSchreiben(){
   const iso = F.iso, alt = DATA.days[iso], vorher = wochenGym(iso);
   if (formLeer()){ const war = !!alt; if (alt) delete DATA.days[iso]; F.changed = false; if (war) touch(); return { leer: true }; }
   const v = parseFloat(F.kg.replace(',', '.'));
-  const kg = F.kg.trim() && isFinite(v) && v > 20 && v < 400 ? Math.round(v * 100) / 100 : null;
+  let kg = F.kg.trim() && isFinite(v) && v > 20 && v < 400 ? Math.round(v * 100) / 100 : null;
+  /* a typo in the weight ("8O", "800") never deletes a weight quietly: the one logged before stays, and a toast says so */
+  if (F.kg.trim() && kg === null){
+    kg = alt && alt.kg != null ? alt.kg : null;
+    toast('Weight “' + F.kg.trim() + '” left out: enter 20–400 kg' + (kg != null ? '. Kept ' + n2(kg) + ' kg.' : '.'), true);
+  }
   const gym = !!F.training, training = F.training === OHNE ? '' : (canon(F.training) || F.training.trim());
   if (gym && training && !partsOf(training)) C.map[training] = [];
   DATA.days[iso] = { gym, training: gym ? training : '', cardio: F.cardio, stretch: F.stretch, special: F.special.trim(), journal: F.journal.trim(),
