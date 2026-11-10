@@ -91,7 +91,7 @@ async function lastSavedJson(env){
   return JSON.parse(await readBlob(env, b));
 }
 const pageText = (env, id) => env.d.getElementById('p-' + id).textContent;
-const tab = async (env, id) => { env.d.querySelector('#tabs .tab[data-tab="' + id + '"]').click(); await sleep(20); };
+const tab = async (env, id) => { env.d.querySelector('#tabs .swahl[data-tab="' + id + '"]').click(); await sleep(20); };
 /* the newest toast (the shared toast component keeps up to three) */
 const toastText = env => { const t = env.d.querySelectorAll('#toasts .toast'); return t.length ? t[t.length - 1].textContent : ''; };
 
@@ -114,14 +114,23 @@ function expected(data){
   check(env.d.getElementById('shell').classList.contains('on'), 'app shell opens after loading the JSON');
   check(env.d.getElementById('titel').textContent === 'Overview', 'opens on Overview');
   check(env.d.getElementById('dateiname').textContent === 'fixture.json', 'file name shown in the nav');
-  const nav = [...env.d.querySelectorAll('#tabs .tab')].map(b => b.textContent);
-  check(nav.join('|') === 'Overview|Entry|Journal|Mapping', 'page order: Overview, Entry, Journal, Mapping (got ' + nav.join('|') + ')');
+  const nav = [...env.d.querySelectorAll('#tabs .swahl')].map(b => b.textContent);
+  check(nav.join('|') === 'Mapping|Journal|Overview|Entry', 'page menu from the top: Mapping, Journal, Overview, Entry next to the button (got ' + nav.join('|') + ')');
   const fx = JSON.parse(FIXTURE), ex = expected(fx);
   const gross = env.d.querySelector('#p-overview .gross span');
   await sleep(900); /* count-up animation */
   check(gross && gross.textContent === String(ex.gym), 'YTD gym days = ' + ex.gym + ' (got ' + (gross && gross.textContent) + ')');
   check(/October 2026|Jan.*Oct.*2026/i.test(pageText(env, 'overview')), 'period label names Oct 2026');
   check(env.d.querySelector('#speichern').textContent === 'Saved', 'save button clean after opening');
+  /* the page button (as in CICO): no tab bar, the button names the page, a page closes the menu */
+  const knopf = env.d.getElementById('seitenknopf'), seitenNav = env.d.getElementById('tabs');
+  check(!env.d.querySelector('.tabs, .tab') && knopf && knopf.getAttribute('aria-label') === 'Pages, now Overview', 'one page button at the bottom right, no tab bar (got ' + (knopf && knopf.getAttribute('aria-label')) + ')');
+  knopf.dispatchEvent(new env.w.MouseEvent('click', { bubbles: true, detail: 0 }));
+  check(seitenNav.classList.contains('offen') && knopf.getAttribute('aria-expanded') === 'true' && !env.d.getElementById('seitenliste').inert, 'the button opens the pages');
+  await tab(env, 'entry');
+  check(!seitenNav.classList.contains('offen') && env.d.getElementById('p-entry').classList.contains('on') && knopf.getAttribute('aria-label') === 'Pages, now Entry'
+    && env.d.querySelector('.swahl[data-tab="entry"]').getAttribute('aria-current') === 'page', 'a page opens and the menu closes; the button now shows Entry');
+  await tab(env, 'overview');
 
   /* 3. every page renders without errors */
   for (const id of ['entry', 'journal', 'mapping', 'overview']){

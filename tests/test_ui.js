@@ -35,6 +35,8 @@ function sample(){
     await p.goto(FILE); await p.waitForTimeout(300);
     return { p, ctx };
   }
+  /* a page through the page button: tap it, tap the page */
+  const seite = async (p, id) => { await p.click('#seitenknopf'); await p.waitForTimeout(350); await p.click('.swahl[data-tab="' + id + '"]'); };
   for (const theme of THEMES){
     for (const [vp, touch, tag] of [[{ width: 390, height: 844 }, true, 'phone'], [{ width: 1360, height: 900 }, false, 'desk']]){
       const { p, ctx } = await page(vp, theme, touch);
@@ -42,12 +44,28 @@ function sample(){
       await p.click('#wahl button.draft'); await p.waitForTimeout(1600);
       await p.screenshot({ path: OUT + '/' + theme + '-' + tag + '-overview.png', fullPage: tag === 'desk' });
       for (const tab of ['entry', 'journal', 'mapping']){
-        await p.click('.tab[data-tab="' + tab + '"]'); await p.waitForTimeout(900);
+        await seite(p, tab); await p.waitForTimeout(900);
         if (tab === 'journal'){ await p.click('details.jm:last-of-type > summary'); await p.waitForTimeout(500); }
         await p.screenshot({ path: OUT + '/' + theme + '-' + tag + '-' + tab + '.png' });
       }
+      if (theme === 'prism'){
+        /* Prism's caustic light: no blur filter and it rests while a page is built (it made Prism lag on the iPhone) */
+        const caustic = await p.evaluate(() => { const l = [...document.querySelectorAll('.caustic i')]; Kit.rest(); return l.length === 3 && l.every(i => getComputedStyle(i).filter === 'none' && getComputedStyle(i).animationPlayState === 'paused'); });
+        if (!caustic) errors.push(theme + ' ' + tag + ': the caustic light is still blurred or does not rest');
+      }
+      if (tag === 'phone'){
+        await p.click('#seitenknopf'); await p.waitForTimeout(400);
+        await p.screenshot({ path: OUT + '/' + theme + '-phone-pages.png' });
+        await p.click('.seitenwahl__schleier', { position: { x: 40, y: 200 } }); await p.waitForTimeout(300);
+        if (await p.getAttribute('#seitenknopf', 'aria-expanded') !== 'false') errors.push(theme + ' phone: a tap on the veil did not close the pages');
+        const kb = await p.locator('#seitenknopf').boundingBox();
+        await p.mouse.move(kb.x + kb.width / 2, kb.y + kb.height / 2); await p.mouse.down(); await p.waitForTimeout(350);
+        const jb = await p.locator('.swahl[data-tab="journal"]').boundingBox();
+        await p.mouse.move(jb.x + jb.width / 2, jb.y + jb.height / 2, { steps: 8 }); await p.waitForTimeout(100); await p.mouse.up(); await p.waitForTimeout(600);
+        if (!(await p.isVisible('#p-journal')) || await p.getAttribute('#seitenknopf', 'aria-expanded') !== 'false') errors.push(theme + ' phone: press, slide to Journal, let go did not open Journal');
+      }
       if (tag === 'desk'){
-        await p.click('.tab[data-tab="entry"]'); await p.waitForTimeout(600);
+        await seite(p, 'entry'); await p.waitForTimeout(600);
         await p.click('.pille'); await p.click('#logknopf'); await p.waitForTimeout(500);
         await p.screenshot({ path: OUT + '/' + theme + '-desk-logged.png' });
         await p.waitForTimeout(2600);
@@ -57,7 +75,7 @@ function sample(){
         await p.click('#look'); await p.waitForTimeout(300);
         await p.screenshot({ path: OUT + '/' + theme + '-desk-look.png' });
         await p.keyboard.press('Escape');
-        await p.click('.tab[data-tab="mapping"]'); await p.waitForTimeout(500);
+        await seite(p, 'mapping'); await p.waitForTimeout(500);
         await p.click('.tag .x'); await p.waitForTimeout(500);
         await p.screenshot({ path: OUT + '/' + theme + '-desk-dialog.png' });
       }
